@@ -6,7 +6,7 @@ from utils import timeformat
 
 class Containers(object):
     """
-    Similar to `docker ps -a`
+    Similar to `docker ps`
     """
     def __init__(self, base_url, version=None):
         self.cli = Client(base_url,version=version)
@@ -15,19 +15,25 @@ class Containers(object):
         self.created_length = 0  # created field length
         self.status_length = 0   # status field length
 
-    def _get_containers(self, show_all=False, filters={}, container_list=None):
+    def _get_containers(self, show_all=False, filters={}, limit=None, container_list=None):
         """
-        :param container_list: list containing coantainer ids to filter
+        :param show_all(bool): Show all containers. Only running containers are shown by default
+        :param filters(dict): Filters to be processed on the image list
+        :parma limit(tuple or list): Filter containers by node
+        :param container_list(tuple): Filter containers by container id
         """
         ret = self.cli.containers(all=show_all,filters=filters)
         self.cli.close()
         for item in ret:
-            # if container_list is given
-            # then get containers whose ids are in container_list
+            # if container_list is given, then get containers by it
             if container_list is not None:
                 if not item['Id'].startswith(container_list):
                     continue
             node = item['Names'][0].split('/', 2)[1]
+            # if limit is given, then get containers by it
+            if limit is not None:
+                if not node in limit:
+                    continue
             # all containers links with this one is present in 'Names'
             names = ','.join([name.split('/', 2)[2] for name in item['Names']])
             # convert created timestamp to string such as '3 hours ago', '2 days ago'
@@ -45,38 +51,41 @@ class Containers(object):
             self.nodes.setdefault(node, []).append(data)
 
     def _pretty_print(self):
-        s1 = ' ' * 4
-        s2 = ' ' * (self.node_length+4-len('NODE'))
-        s3 = ' ' * (self.created_length+4-len('CREATED'))
-        s4 = ' ' * (self.status_length+4-len('STATUS'))
-        title = 'CONTAINER ID{s1}NODE{s2}CREATED{s3}STATUS{s4}NAMES'.format(\
-                                                                        s1=s1,\
-                                                                        s2=s2,\
-                                                                        s3=s3,\
-                                                                        s4=s4)
-        string = ''
-        for node in sorted(self.nodes):
-            for data in self.nodes[node]:
-                cid, node, created, status, names = data
-                s1 = ' ' * 4
-                s2 = ' ' * (self.node_length+4-len(node))
-                s3 = ' ' * (self.created_length+4-len(created))
-                s4 = ' ' * (self.status_length+4-len(status))
-                string += '{id}{s1}{node}{s2}{created}{s3}{status}{s4}{names}\n'.format(\
-                                                                            id=cid[:12],\
+        if self.nodes:
+            # title: CONTAINER ID    NODE    CREATED    STATUS    NAMES
+            s1 = ' ' * 4
+            s2 = ' ' * (self.node_length+4-len('NODE'))
+            s3 = ' ' * (self.created_length+4-len('CREATED'))
+            s4 = ' ' * (self.status_length+4-len('STATUS'))
+            title = 'CONTAINER ID{s1}NODE{s2}CREATED{s3}STATUS{s4}NAMES'.format(\
                                                                             s1=s1,\
-                                                                            node=node,\
                                                                             s2=s2,\
-                                                                            created=created,\
                                                                             s3=s3,\
-                                                                            status=status,\
-                                                                            s4=s4,\
-                                                                            names=names)
-        # return pretty-print string
-        print('{title}\n{string}'.format(title=title,string=string).rstrip())
+                                                                            s4=s4)
+            # pretty-print string defined by title
+            string = ''
+            for node in sorted(self.nodes):
+                for data in self.nodes[node]:
+                    cid, node, created, status, names = data
+                    s1 = ' ' * 4
+                    s2 = ' ' * (self.node_length+4-len(node))
+                    s3 = ' ' * (self.created_length+4-len(created))
+                    s4 = ' ' * (self.status_length+4-len(status))
+                    string += '{id}{s1}{node}{s2}{created}{s3}{status}{s4}{names}\n'.format(\
+                                                                                id=cid[:12],\
+                                                                                s1=s1,\
+                                                                                node=node,\
+                                                                                s2=s2,\
+                                                                                created=created,\
+                                                                                s3=s3,\
+                                                                                status=status,\
+                                                                                s4=s4,\
+                                                                                names=names)
+            # return pretty-print string
+            print('{title}\n{string}'.format(title=title,string=string).rstrip())
 
-    def __call__(self, show_all=False, filters={}):
-        self._get_containers(show_all=show_all,filters=filters)
+    def __call__(self, show_all=False, filters={},limit=None):
+        self._get_containers(show_all=show_all,filters=filters,limit=limit)
         self._pretty_print()
 
 class Start(Containers):
@@ -92,9 +101,9 @@ class Start(Containers):
             try:
                 self.cli.start(container_id)
             except errors.NotFound as e:
-                print('{message} ({explanation})'.format(\
-                                                message=e.message,\
-                                                explanation=e.explanation))
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
             except errors.DockerException:
                 print(e)
             finally:
@@ -117,9 +126,9 @@ class Stop(Containers):
             try:
                 self.cli.stop(container_id)
             except errors.NotFound as e:
-                print('{message} ({explanation})'.format(\
-                                                message=e.message,\
-                                                explanation=e.explanation))
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
             except errors.DockerException as e:
                 print(e)
             finally:
@@ -143,9 +152,9 @@ class Restart(Containers):
             try:
                 self.cli.restart(container_id)
             except errors.NotFound as e:
-                print('{message} ({explanation})'.format(\
-                                                message=e.message,\
-                                                explanation=e.explanation))
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
             except errors.DockerException as e:
                 print(e)
             finally:
@@ -169,9 +178,10 @@ class Remove(Containers):
             try:
                 self.cli.remove_container(container_id)
             except errors.NotFound as e:
-                print('{message} ({explanation})'.format(\
-                                                message=e.message,\
-                                                explanation=e.explanation))
+                print(e.explanation)
+                container_error.add(container_id)
+            except errors.APIError as e:
+                print(e.explanation)
                 container_error.add(container_id)
             except errors.DockerException as e:
                 print(e)
@@ -187,16 +197,4 @@ class Remove(Containers):
                                             containers=', '.join(container_removed)))
 
 if __name__ == '__main__':
-    base_url = 'tcp://172.24.128.31:3375'
-    version = '1.20'
-    container_ids = ('691d71b45129', 'c832fa5f3fdb')
-    #containers = Containers(base_url, version)
-    #containers()
-    #stop = Stop(base_url, version)
-    #stop(container_ids)
-    #start = Start(base_url, version)
-    #start(container_ids)
-    #restart = Restart(base_url, version)
-    #restart(container_ids)
-    #remove = Remove(base_url, version)
-    #remove(container_ids)
+    pass

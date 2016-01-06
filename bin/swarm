@@ -9,37 +9,67 @@ def add_parser(base_url, version):
         'version': Version(base_url, version),
         'info': Info(base_url, version),
         'ps': Containers(base_url, version),
+        'start': Start(base_url, version),
+        'stop': Stop(base_url, version),
+        'restart': Restart(base_url, version),
+        'rm': Remove(base_url, version),
     }
     # create the top-level parser
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
     # create the parser for command 'version'
-    parser_version = subparsers.add_parser('version')
+    parser_version = subparsers.add_parser('version', help='Show the Docker version information.')
     parser_version.set_defaults(func=funcs['version'])
     # create the parser for command 'info'
-    parser_info = subparsers.add_parser('info')
+    parser_info = subparsers.add_parser('info', help='Display system-wide information')
     parser_info.set_defaults(func=funcs['info'])
     # create the parser for command 'ps'
-    parser_ps = subparsers.add_parser('ps')
-    parser_ps.add_argument('-a', '--all', help='Show all containers (default shows just running)',\
-                                                                                action='store_true')
-    parser_ps.add_argument('-f', '--filter', nargs='+', help='Filter output based on conditions provide')
+    parser_ps = subparsers.add_parser('ps', help='List containers')
+    parser_ps.add_argument('-a', '--all',action='store_true',\
+                            help='Show all containers (default shows just running)')
+    parser_ps.add_argument('-f', '--filter',type=str,\
+                            help='Filter output based on conditions provide, a comma-separated list')
+    parser_ps.add_argument('-l','--limit',type=str,\
+                            help='Show containers on nodes provide, a comma-separated list')
     parser_ps.set_defaults(func=funcs['ps'])
+    # create the paser for command 'start'
+    parser_start = subparsers.add_parser('start', help='Start one or more stopped containers')
+    parser_start.add_argument('CONTAINER',nargs='+', help='Container ID')
+    parser_start.set_defaults(func=funcs['start'])
+    # create the paser for command 'stop'
+    parser_start = subparsers.add_parser('stop',\
+                            help='Stop a running container by sending SIGTERM and then SIGKILL after a grace period')
+    parser_start.add_argument('CONTAINER',nargs='+', help='Container ID')
+    parser_start.set_defaults(func=funcs['stop'])
+    # create the paser for command 'restart'
+    parser_start = subparsers.add_parser('restart', help='Restart a running container')
+    parser_start.add_argument('CONTAINER',nargs='+', help='Container ID')
+    parser_start.set_defaults(func=funcs['restart'])
+    # create the paser for command 'rm'
+    parser_start = subparsers.add_parser('rm', help='Remove one or more containers')
+    parser_start.add_argument('CONTAINER',nargs='+', help='Container ID')
+    parser_start.set_defaults(func=funcs['rm'])
     return parser
 
 def main(base_url, version):
     parser = add_parser(base_url, version)
     args = parser.parse_args()
-    clsname = args.func.__class__.__name__
-    if clsname in ('Version', 'Info'):
+    method = args.func.__class__.__name__
+    if method in ('Version', 'Info'):
         args.func()
-    elif clsname == 'Containers':
+    elif method == 'Containers':
         filters = {}
         if args.filter:
-            for item in args.filter:
+            for item in args.filter.split(','):
                 k, v = item.split('=')
                 filters[k] = v
-        args.func(show_all=args.all,filters=filters)
+        if args.limit:
+            limit = tuple(args.limit.split(','))
+        else:
+            limit = None
+        args.func(show_all=args.all,filters=filters,limit=limit)
+    elif method in ('Start', 'Stop', 'Restart', 'Remove'):
+        args.func(tuple(args.CONTAINER))
 
 if __name__ == '__main__':
     base_url = 'tcp://172.24.128.31:3375'
