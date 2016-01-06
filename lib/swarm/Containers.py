@@ -15,11 +15,11 @@ class Containers(object):
         self.created_length = 0  # created field length
         self.status_length = 0   # status field length
 
-    def _get_containers(self, container_list=None):
+    def _get_containers(self, show_all=False, filters={}, container_list=None):
         """
         :param container_list: list containing coantainer ids to filter
         """
-        ret = self.cli.containers(all=True)
+        ret = self.cli.containers(all=show_all,filters=filters)
         self.cli.close()
         for item in ret:
             # if container_list is given
@@ -30,7 +30,7 @@ class Containers(object):
             node = item['Names'][0].split('/', 2)[1]
             # all containers links with this one is present in 'Names'
             names = ','.join([name.split('/', 2)[2] for name in item['Names']])
-            # convert created timestamp to string such as '3 hours ago'
+            # convert created timestamp to string such as '3 hours ago', '2 days ago'
             created_delta = datetime.now() - datetime.fromtimestamp(item['Created'])
             if created_delta.days > 1:
                 created = '{day} days ago'.format(day=created_delta.days)
@@ -75,8 +75,8 @@ class Containers(object):
         # return pretty-print string
         print('{title}\n{string}'.format(title=title,string=string).rstrip())
 
-    def __call__(self):
-        self._get_containers()
+    def __call__(self, show_all=False, filters={}):
+        self._get_containers(show_all=show_all,filters=filters)
         self._pretty_print()
 
 class Start(Containers):
@@ -100,7 +100,7 @@ class Start(Containers):
             finally:
                 self.cli.close()
         # print container status
-        self._get_containers(container_list)
+        self._get_containers(container_list=container_list)
         if self.nodes:
             self._pretty_print()
 
@@ -125,7 +125,8 @@ class Stop(Containers):
             finally:
                 self.cli.close()
         # print container status
-        self._get_containers(container_list)
+        self._get_containers(filters={'status': 'exited'},\
+                                container_list=container_list)
         if self.nodes:
             self._pretty_print()
 
@@ -150,19 +151,52 @@ class Restart(Containers):
             finally:
                 self.cli.close()
         # print container status
-        self._get_containers(container_list)
+        self._get_containers(container_list=container_list)
         if self.nodes:
             self._pretty_print()
+
+class Remove(Containers):
+    """
+    Similar to `docker rm`
+    """
+    def __init__(self, base_url, version=None):
+        super(Remove, self).__init__(base_url, version)
+
+    def __call__(self, container_list):
+        # exec `docer rm`
+        container_error = set()
+        for container_id in container_list:
+            try:
+                self.cli.remove_container(container_id)
+            except errors.NotFound as e:
+                print('{message} ({explanation})'.format(\
+                                                message=e.message,\
+                                                explanation=e.explanation))
+                container_error.add(container_id)
+            except errors.DockerException as e:
+                print(e)
+                container_error.add(container_id)
+            finally:
+                self.cli.close()
+        # exclude containers in container_error
+        container_removed = tuple([ container_id for container_id in container_list\
+                                            if not container_id in container_error ])
+        self._get_containers(container_list=container_removed)
+        if not self.nodes and container_removed:
+            print('Succeed to remove container {containers}'.format(\
+                                            containers=', '.join(container_removed)))
 
 if __name__ == '__main__':
     base_url = 'tcp://172.24.128.31:3375'
     version = '1.20'
-    container_ids = ('0ca2f37ae038', '58b62c6cf7b0', '29d4c6b6ced9', 'c832fa5f3fdb')
+    container_ids = ('691d71b45129', 'c832fa5f3fdb')
     #containers = Containers(base_url, version)
     #containers()
     #stop = Stop(base_url, version)
     #stop(container_ids)
     #start = Start(base_url, version)
     #start(container_ids)
-    restart = Restart(base_url, version)
-    restart(container_ids)
+    #restart = Restart(base_url, version)
+    #restart(container_ids)
+    #remove = Remove(base_url, version)
+    #remove(container_ids)
