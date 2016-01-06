@@ -1,15 +1,14 @@
 # -*- coding: utf8 -*-
 
 from docker import Client
-from config import VERSION
 from utils import byteformat
 
 class Version(object):
     """
-    Equals to `docker version`
+    Similar to `docker version`
     """
-    def __init__(self, base_url):
-        self.cli = Client(base_url, version=VERSION)
+    def __init__(self, base_url, version=None):
+        self.cli = Client(base_url, version=version)
 
     def __call__(self):
         ret = self.cli.version()
@@ -30,15 +29,15 @@ Server
     Os=ret['Os'],\
     Arch=ret['Arch'])
         print(string)
-        # close communication
+        # close session
         self.cli.close()
 
 class Info(object):
     """
-    Equals to `docker info`
+    Similar to `docker info`
     """
-    def __init__(self, base_url):
-        self.cli = Client(base_url, version=VERSION)
+    def __init__(self, base_url, version=None):
+        self.cli = Client(base_url, version=version)
 
     def __call__(self):
         ret = self.cli.info()
@@ -58,13 +57,14 @@ Name: {Name}\
     MemTotal=byteformat(ret['MemTotal']),\
     Name=ret['Name'])
         print(string)
-        # close communication
+        # close session
         self.cli.close()
 
 
 if __name__ == '__main__':
     base_url = 'tcp://172.24.128.31:3375'
-    version = Version(base_url)
+    version = '1.20'
+    version = Version(base_url, version)
     version()
     info = Info(base_url)
     info()
