@@ -1,7 +1,8 @@
+from config import ApiConfig
 from misc import Version, Info
 from container import Containers, StartContainer, StopContainer, RestartContainer, RemoveContainer
 from image import Images, Tag, RemoveImage
 
-__all__ = ['Version', 'Info', 'Containers', 'StartContainer',\
+__all__ = ('ApiConfig', 'Version', 'Info', 'Containers', 'StartContainer',\
            'StopContainer', 'RestartContainer', 'RemoveContainer',\
-           'Images', 'Tag', 'RemoveImage']
+           'Images', 'Tag', 'RemoveImage')
