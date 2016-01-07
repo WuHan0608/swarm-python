@@ -1,13 +1,13 @@
 # -*- coding: utf8 -*-
 
-def byteformat(size, unit='B'):
+def byteformat(size, base=1024, unit='B'):
     """
     Convert byte to KiB / MiB / GiB / TiB if possible
     """
-    units = ('B', 'KiB', 'MiB', 'GiB', 'TiB')
-    if size < 1024:
+    units = ('B', 'KB', 'MB', 'GB', 'TB')
+    if size < base:
         return '{s:.2f} {u}'.format(s=size,u=unit)
-    return byteformat(size/1024.0, units[units.index(unit)+1])
+    return byteformat(size/float(base), base, units[units.index(unit)+1])
 
 def timeformat(time, unit='second'):
     """

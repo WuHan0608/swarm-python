@@ -59,12 +59,3 @@ Name: {Name}\
         print(string)
         # close session
         self.cli.close()
-
-
-if __name__ == '__main__':
-    base_url = 'tcp://172.24.128.31:3375'
-    version = '1.20'
-    version = Version(base_url, version)
-    version()
-    info = Info(base_url)
-    info()
