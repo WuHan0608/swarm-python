@@ -1,6 +1,5 @@
 # -*- coding: utf8 -*-
 
-import json
 from docker import errors
 from datetime import datetime
 from base import Docker
@@ -17,7 +16,8 @@ class Containers(object):
         self.created_length = 7  # `created` length
         self.status_length = 6   # `status` length
 
-    def _get_containers(self, show_all=False, filters={}, limit=None, container_list=None):
+    def _get_containers(self, show_all=False, filters={}, limit=None,\
+                        latest=None, since=None, container_list=None):
         """
         :param show_all(bool): Show all containers. Only running containers are shown by default
         :param filters(dict): Filters to be processed on the image list
@@ -25,15 +25,16 @@ class Containers(object):
         :param container_list(tuple): Filter containers by container id
         """
         if self.cli is not None:
-            ret = cli.containers(all=show_all,filters=filters)
+            ret = self.cli.containers(all=show_all, filters=filters,\
+                                      latest=latest, since=since)
             self.cli.close()
             for container in ret:
                 # if container_list provide, then get containers by it
                 if container_list is not None:
                     if not container['Id'].startswith(container_list):
                         continue
-                node = container['Names'][0].split('/', 2)[1]
                 # if limit is given, then get containers by it
+                node = container['Names'][0].split('/', 2)[1]
                 if limit is not None:
                     if not node in limit:
                         continue
@@ -207,24 +208,54 @@ class CreateContainer(Containers):
     def __init__(self):
         super(CreateContainer, self).__init__()
 
-    def _create_container(self, image, command=None, hostname=None, user=None,
-                          detach=False, stdin_open=False, tty=False,
-                          mem_limit=None, ports=None, environment=None,
-                          dns=None, volumes=None, volumes_from=None,
-                          network_disabled=False, name=None, entrypoint=None,
-                          cpu_shares=None, working_dir=None, domainname=None,
-                          memswap_limit=None, cpuset=None, host_config=None,
-                          mac_address=None, labels=None, volume_driver=None,
-                          stop_signal=None):
+    def _create_container(self, image, command, hostname, user, detach, stdin_open,\
+                          tty, mem_limit, ports, environment, dns, volumes,\
+                          volumes_from, network_disabled, name, entrypoint,\
+                          cpu_shares, working_dir, domainname, memswap_limit,\
+                          cpuset, host_config, mac_address, labels, volume_driver,\
+                          stop_signal):
         try:
-            self.cli.create_container(image, command, hostname, user, detach, stdin_open,\
-                                      tty, mem_limit, ports, environment, dns, volumes,\
-                                      volumes_from, network_disabled, name, entrypoint,\
-                                      cpu_shares, working_dir, domainname, memswap_limit,\
-                                      cpuset, host_config, mac_address, labels, volume_driver,\
-                                      stop_signal)
+            ret = self.cli.create_container(image, command, hostname, user, detach, stdin_open,\
+                                            tty, mem_limit, ports, environment, dns, volumes,\
+                                            volumes_from, network_disabled, name, entrypoint,\
+                                            cpu_shares, working_dir, domainname, memswap_limit,\
+                                            cpuset, host_config, mac_address, labels, volume_driver,\
+                                            stop_signal)
         except errors.APIError as e:
             print(e.explanation)
         except errors.DockerException as e:
             print(e.explanation)
+        except TypeError as e:
+            print(e)
+        self.container_id, self.warning = ret
 
+    def _print_created_container(self):
+        # try to get the latest container
+        # check if container id is matched
+        # otherwise search containers since=self.container_id
+        latest_container = self.cli.containers(latest=True)[0]
+        if self.container_id == latest_container['Id']:
+            self._get_containers(latest=True)
+        else:
+            self._get_containers(since=self.container_id, container_list=(self.container_id,))
+        self._pretty_print()
+
+    def __call__(self, image, command=None, hostname=None, user=None,\
+                 detach=False, stdin_open=False, tty=False,\
+                 mem_limit=None, ports=None, environment=None,\
+                 dns=None, volumes=None, volumes_from=None,\
+                 network_disabled=False, name=None, entrypoint=None,\
+                 cpu_shares=None, working_dir=None, domainname=None,\
+                 memswap_limit=None, cpuset=None, host_config=None,\
+                 mac_address=None, labels=None, volume_driver=None,\
+                 stop_signal=None):
+        if self.cli is not None:
+            self._create_container(image, command, hostname, user, detach, stdin_open,\
+                                   tty, mem_limit, ports, environment, dns, volumes,\
+                                   volumes_from, network_disabled, name, entrypoint,\
+                                   cpu_shares, working_dir, domainname, memswap_limit,\
+                                   cpuset, host_config, mac_address, labels, volume_driver,\
+                                   stop_signal)
+            if self.warning is not None:
+                print('[Wanring] {message}'.format(message=self.warning))
+            self._print_created_container()
