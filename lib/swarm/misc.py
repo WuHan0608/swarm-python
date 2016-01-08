@@ -1,18 +1,21 @@
 # -*- coding: utf8 -*-
 
 from docker import Client
+from base import Docker
 from utils import byteformat
 
 class Version(object):
     """
     Similar to `docker version`
     """
-    def __init__(self, base_url, version=None):
-        self.cli = Client(base_url, version=version)
+    def __init__(self):
+        self.cli = Docker().client
 
     def __call__(self):
-        ret = self.cli.version()
-        string = '''\
+        if self.cli is not None:
+            ret = self.cli.version()
+            self.cli.close()
+            string = '''\
 Server
  Version:      {Version}
  API version:  {ApiVersion}
@@ -28,20 +31,19 @@ Server
     KernelVersion=ret['KernelVersion'],\
     Os=ret['Os'],\
     Arch=ret['Arch'])
-        print(string)
-        # close session
-        self.cli.close()
+            print(string)
 
 class Info(object):
     """
     Similar to `docker info`
     """
-    def __init__(self, base_url, version=None):
-        self.cli = Client(base_url, version=version)
+    def __init__(self):
+        self.cli = Docker().client
 
     def __call__(self):
-        ret = self.cli.info()
-        string = '''\
+        if self.cli is not None:
+            ret = self.cli.info()
+            string = '''\
 Containers: {Containers}
 Images: {Images}
 {DriverStatus}
@@ -56,6 +58,4 @@ Name: {Name}\
     NCPU=ret['NCPU'],\
     MemTotal=byteformat(ret['MemTotal']),\
     Name=ret['Name'])
-        print(string)
-        # close session
-        self.cli.close()
+            print(string)
