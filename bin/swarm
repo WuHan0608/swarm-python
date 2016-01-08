@@ -3,7 +3,6 @@
 
 import argparse
 import json
-import os
 from swarm import *
 
 def base_url_found(config):
@@ -35,7 +34,7 @@ def add_parser():
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers()
     #
-    # create the parser for command 'swarm config'
+    # create the subparser for command 'swarm config'
     parser_config = subparsers.add_parser('api', help='Config Swarm API arguments, Otherwise no further command')
     parser_config.add_argument('command', choices=('get','update','remove','use'),\
                                 help='Available comamnd: get, update, remove, use')
@@ -60,16 +59,17 @@ set one name as current Swarm API for `use`')
             'images': Images(),
             'rmi': RemoveImage(),
             'tag': Tag(),
+            'run': CreateContainer(),
         }
-        # create the parser for command 'swarm version'
+        # create the subparser for command 'swarm version'
         parser_version = subparsers.add_parser('version', help='Show the Docker version information.')
         parser_version.set_defaults(func=funcs['version'])
         #
-        # create the parser for command 'swarm info'
+        # create the subparser for command 'swarm info'
         parser_info = subparsers.add_parser('info', help='Display system-wide information')
         parser_info.set_defaults(func=funcs['info'])
         #
-        # create the parser for command 'swarm ps'
+        # create the subparser for command 'swarm ps'
         parser_ps = subparsers.add_parser('ps', help='List containers')
         parser_ps.add_argument('-a', '--all',action='store_true',\
                                 help='Show all containers (default shows just running)')
@@ -79,28 +79,28 @@ set one name as current Swarm API for `use`')
                                 help='Show containers on nodes provide, a comma-separated list')
         parser_ps.set_defaults(func=funcs['ps'])
         #
-        # create the paser for command 'swarm start'
+        # create the subpaser for command 'swarm start'
         parser_start = subparsers.add_parser('start', help='Start one or more stopped containers')
         parser_start.add_argument('CONTAINER',nargs='+', help='Container ID')
         parser_start.set_defaults(func=funcs['start'])
         #
-        # create the paser for command 'swarm stop'
+        # create the subpaser for command 'swarm stop'
         parser_start = subparsers.add_parser('stop',\
                                 help='Stop a running container by sending SIGTERM and then SIGKILL after a grace period')
         parser_start.add_argument('CONTAINER',nargs='+', help='Container ID')
         parser_start.set_defaults(func=funcs['stop'])
         #
-        # create the paser for command 'swarm restart'
+        # create the subpaser for command 'swarm restart'
         parser_start = subparsers.add_parser('restart', help='Restart a running container')
         parser_start.add_argument('CONTAINER',nargs='+', help='Container ID')
         parser_start.set_defaults(func=funcs['restart'])
         #
-        # create the paser for command 'swarm rm'
+        # create the subpaser for command 'swarm rm'
         parser_start = subparsers.add_parser('rm', help='Remove one or more containers')
         parser_start.add_argument('CONTAINER',nargs='+', help='CONTAINER ID')
         parser_start.set_defaults(func=funcs['rm'])
         #
-        # create the parser for command 'swarm images'
+        # create the subparser for command 'swarm images'
         parser_images = subparsers.add_parser('images', help='List images')
         parser_images.add_argument('REPOSITORY', nargs='?', help='REPOSITORY NAME', default=None)
         parser_images.add_argument('-a', '--all', action='store_true',\
@@ -109,16 +109,54 @@ set one name as current Swarm API for `use`')
                                     help='Filter output based on conditions provided, a comma-separated list')
         parser_images.set_defaults(func=funcs['images'])
         #
-        # create the parser for command 'swarm rmi'
+        # create the subparser for command 'swarm rmi'
         parser_rmi = subparsers.add_parser('rmi', help='Remove one or more images')
         parser_rmi.add_argument('IMAGE', nargs='+', help='IMAGE[:TAG]')
         parser_rmi.set_defaults(func=funcs['rmi'])
         #
-        # create the parser for command 'swarm tag'
+        # create the subparser for command 'swarm tag'
         parser_tag = subparsers.add_parser('tag', help='Tag an image into a repository')
         parser_tag.add_argument('IMAGE', type=str, help='IMAGE[:TAG]')
         parser_tag.add_argument('REPOTAG', type=str, help='[REGISTRYHOST/][USERNAME/]NAME[:TAG]')
         parser_tag.set_defaults(func=funcs['tag'])
+        #
+        # create the subparser for command 'swarm run'
+        parser_run = subparsers.add_parser('run', help='Run a command in a new container')
+        parser_run.add_argument('--cpuset-cpus', dest='cpuset', type=str,\
+                                help='CPUs in which to allow execution (0-3, 0,1)')
+        parser_run.add_argument('-e', '--environment', type=str,\
+                                help='Set environment variables, a comma-separated list')
+        parser_run.add_argument('--entrypoint', type=str,\
+                                help='Overwrite the default ENTRYPOINT of the image')
+        parser_run.add_argument('--hostname', type=str,\
+                                help='Container host name')
+        parser_run.add_argument('-l', '--label', type=str,\
+                                help='Set meta data on a container')
+        parser_run.add_argument('--link', type=str,\
+                                help='Add link to another container')
+        parser_run.add_argument('-m', '--memory', type=str,\
+                                help='Memory limit')
+        parser_run.add_argument('--name', type=str,\
+                                help='Assign a name to the container')
+        parser_run.add_argument('--net', type=str,\
+                                help='Set the Network mode for the container')
+        parser_run.add_argument('-P', '--publish-all', action='store_true',\
+                                help='Publish all exposed ports to random ports')
+        parser_run.add_argument('-p', '--publish', type=str,\
+help='Publish a container\'s port(s) to the host\
+(format: ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort),\
+a comma-separated list')
+        parser_run.add_argument('--privileged', action='store_true',\
+                                help='Give extended privileges to this container')
+        parser_run.add_argument('--restart', type=str,\
+                                help='Restart policy to apply when a container exits')
+        parser_run.add_argument('--rm', action='store_true')
+        parser_run.add_argument('-u', '--user', type=str,\
+                                help='Username or UID')
+        parser_run.add_argument('-v', '--volume', type=str,\
+                                help='Bind mount a volume, a comma-separated list')
+        parser_run.add_argument('--volumes-from', dest='volumes_from', type=str,\
+help='Mount volumes from the specified container(s), a comma-separated list')
     return parser
 
 def main():
@@ -131,18 +169,18 @@ def main():
             if not current_url_found(ApiConfig().config):
                 print(notice)
             for name in args.argument.split(','):
-                args.func.get_api(name)
+                args.func.get_api(name.strip())
         elif args.command == 'update':
             if not current_url_found(ApiConfig().config):
                 print(notice)
             for item in args.argument.split(','):
-                name, api = item.split('=')
+                name, api = item.strip().split('=')
                 args.func.update_api(name, api)
         elif args.command == 'remove':
             if not current_url_found(ApiConfig().config):
                 print(notice)
             for name in args.argument.split(','):
-                args.func.remove_api(name)
+                args.func.remove_api(name.strip())
         elif args.command == 'use':
             args.func.use_api(args.argument)
     elif method in ('Version', 'Info'):
@@ -151,20 +189,22 @@ def main():
         filters = {}
         if args.filter:
             for item in args.filter.split(','):
-                k, v = item.split('=')
+                k, v = item.strip().split('=')
                 filters[k] = v
         if args.limit:
-            limit = tuple(args.limit.split(','))
+            limit = tuple([n.strip() for n in args.limit.split(',')])
         else:
             limit = None
         args.func(show_all=args.all,filters=filters,limit=limit)
-    elif method in ('Start', 'Stop', 'Restart', 'RemoveContainer'):
+    elif method in ('StartContainer', 'StopContainer', 'RestartContainer', 'RemoveContainer'):
         args.func(tuple(args.CONTAINER))
+    elif method == 'CreateContainer':
+        pass
     elif method == 'Images':
         filters = {}
         if args.filter:
             for item in args.filter.split(','):
-                k, v = item.split('=')
+                k, v = item.strip().split('=')
                 filters[k] = v
         args.func(name=args.REPOSITORY,show_all=args.all,filters=filters)
     elif method == 'RemoveImage':
