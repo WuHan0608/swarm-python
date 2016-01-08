@@ -227,5 +227,10 @@ def main():
             repo, tag = repo_name
         args.func(args.IMAGE, repo, tag)
 
+def test():
+    cmd = SwarmCommand()
+    cmd.run()
+
+
 if __name__ == '__main__':
-    main()
+    test()
