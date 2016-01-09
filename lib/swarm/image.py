@@ -2,7 +2,7 @@
 
 from docker import errors
 from datetime import datetime
-from base import Docker
+from base import SwarmClient
 from utils import timeformat, byteformat
 
 class Images(object):
@@ -10,7 +10,7 @@ class Images(object):
     Similar to `docker images`
     """
     def __init__(self):
-        self.cli = Docker().client
+        self.cli = SwarmClient().client
         self.repo_length = 10    # `REPOSITORY` length
         self.tag_length = 3      # `TAG` length
         self.created_length = 7  # `CREATED` length

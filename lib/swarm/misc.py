@@ -1,7 +1,6 @@
 # -*- coding: utf8 -*-
 
-from docker import Client
-from base import Docker
+from base import SwarmClient
 from utils import byteformat
 
 class Version(object):
@@ -9,14 +8,22 @@ class Version(object):
     Similar to `docker version`
     """
     def __init__(self):
-        self.cli = Docker().client
+        self.swarm = SwarmClient()
+        self.cli = self.swarm.client
 
     def __call__(self):
         if self.cli is not None:
             ret = self.cli.version()
             self.cli.close()
-            string = '''\
-Server
+            string = ''
+            if self.cli.version is not None:
+                string = '''\
+Client:
+ API version:  {ApiVersion}\n
+'''.format(ApiVersion=ret['ApiVersion'] if self.swarm.version == 'auto'\
+                                                else self.swarm.version)
+            string += '''\
+Server:
  Version:      {Version}
  API version:  {ApiVersion}
  Go version:   {GoVersion}
@@ -38,7 +45,7 @@ class Info(object):
     Similar to `docker info`
     """
     def __init__(self):
-        self.cli = Docker().client
+        self.cli = SwarmClient().client
 
     def __call__(self):
         if self.cli is not None:

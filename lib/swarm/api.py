@@ -3,9 +3,9 @@
 import os
 import json
 
-class ApiConfig(object):
+class SwarmApi(object):
     """
-    Get swarm config
+    swarm api
     """
     def __init__(self):
         # config: $HOME/.swarm/config.json
@@ -47,8 +47,10 @@ class ApiConfig(object):
                         print('Error: `{name}` is unset. Available arguments: {args}'.format(\
                                                                                     name=name,\
                                                                                     args=args))
-            except OSError as e:
+            except IOError as e:
                 print(e)
+            except OSError:
+                raise
 
     def update_api(self, name, api):
         if self._has_config(warning=False):
@@ -95,27 +97,50 @@ class ApiConfig(object):
                         return
                 with open(self._config, 'w') as fp:
                     fp.write(json.dumps(data, indent=4))
-            except OSError as e:
+            except IOError as e:
                 print(e)
+            except OSError:
+                raise
 
     def use_api(self, name):
         if self._has_config():
             try:
                 with open(self._config, 'r') as fp:
                     data = json.load(fp)
-                    if name in data['apis']:
-                        data['current'] = name
+                if name in data['apis']:
+                    data['current'] = name
+                else:
+                    if data['apis'].keys():
+                        args = ','.join(data['apis'].keys())
+                        print('Error: `{name}` not exist. Available arguments: {args}'.format(\
+                                                                                    name=name,\
+                                                                                    args=args))
                     else:
-                        if data['apis'].keys():
-                            args = ','.join(data['apis'].keys())
-                            print('Error: `{name}` not exist. Available arguments: {args}'.format(\
-                                                                                        name=name,\
-                                                                                        args=args))
-                        else:
-                            print('No available swarm api')
-                        return
+                        print('No available swarm api')
+                    return
                 with open(self._config, 'w') as fp:
                     fp.write(json.dumps(data, indent=4))
-            except OSError as e:
+            except IOError as e:
                 print(e)
+            except OSError:
+                raise
 
+    def use_version(self, version):
+        if self._has_config():
+            try:
+                if version == 'auto' or float(version) >= 1.10:
+                    with open(self._config, 'r') as fp:
+                        data = json.load(fp)
+                    data['version'] = version
+                    with open(self._config, 'w') as fp:
+                        fp.write(json.dumps(data, indent=4))
+                else:
+                    print('Error: {version} is not numeric or greater than 1.10'.format(\
+                                                                            version=version))
+            except ValueError:
+                print('Error: {version} is not numeric or greater than 1.10'.format(\
+                                                                        version=version))
+            except IOError as e:
+                print(e)
+            except OSError:
+                raise

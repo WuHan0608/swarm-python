@@ -2,7 +2,7 @@
 
 from docker import errors
 from datetime import datetime
-from base import Docker
+from base import SwarmClient
 from utils import timeformat
 
 class Containers(object):
@@ -10,7 +10,7 @@ class Containers(object):
     Similar to `docker ps`
     """
     def __init__(self):
-        self.cli = Docker().client
+        self.cli = SwarmClient().client
         self.nodes = {}
         self.node_length = 4     # `node` length
         self.created_length = 7  # `created` length
@@ -30,6 +30,7 @@ class Containers(object):
             self.cli.close()
             for container in ret:
                 # if container_list provide, then get containers by it
+                # name and id are both allowed from version '1.20'
                 if container_list is not None:
                     if not container['Id'].startswith(container_list):
                         continue
@@ -207,55 +208,49 @@ class CreateContainer(Containers):
     """
     def __init__(self):
         super(CreateContainer, self).__init__()
+        self.container_id = None
+        self.warning = None
 
-    def _create_container(self, image, command, hostname, user, detach, stdin_open,\
-                          tty, mem_limit, ports, environment, dns, volumes,\
-                          volumes_from, network_disabled, name, entrypoint,\
-                          cpu_shares, working_dir, domainname, memswap_limit,\
-                          cpuset, host_config, mac_address, labels, volume_driver,\
-                          stop_signal):
+    def _create_container(self, *args, **kwargs):
         try:
-            ret = self.cli.create_container(image, command, hostname, user, detach, stdin_open,\
-                                            tty, mem_limit, ports, environment, dns, volumes,\
-                                            volumes_from, network_disabled, name, entrypoint,\
-                                            cpu_shares, working_dir, domainname, memswap_limit,\
-                                            cpuset, host_config, mac_address, labels, volume_driver,\
-                                            stop_signal)
+            ret = self.cli.create_container(*args, **kwargs)
+            # Warning is missing if succeed to start the container
+            self.container_id, self.warning = ret.get('Id'), ret.get('Warnings')
         except errors.APIError as e:
             print(e.explanation)
         except errors.DockerException as e:
             print(e.explanation)
         except TypeError as e:
             print(e)
-        self.container_id, self.warning = ret
+
+    def _start_created_container(self):
+        if self.container_id is not None:
+            try:
+                self.cli.start(self.container_id)
+            except errors.NotFound as e:
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
+            except errors.DockerException as e:
+                print(e.explanation)   
 
     def _print_created_container(self):
         # try to get the latest container
         # check if container id is matched
         # otherwise search containers since=self.container_id
-        latest_container = self.cli.containers(latest=True)[0]
-        if self.container_id == latest_container['Id']:
-            self._get_containers(latest=True)
-        else:
-            self._get_containers(since=self.container_id, container_list=(self.container_id,))
-        self._pretty_print()
+        if self.container_id is not None:
+            latest_container = self.cli.containers(latest=True)[0]
+            if self.container_id == latest_container['Id']:
+                self._get_containers(latest=True)
+            else:
+                self._get_containers(since=self.container_id, container_list=(self.container_id,))
+            self._pretty_print()
 
-    def __call__(self, image, command=None, hostname=None, user=None,\
-                 detach=False, stdin_open=False, tty=False,\
-                 mem_limit=None, ports=None, environment=None,\
-                 dns=None, volumes=None, volumes_from=None,\
-                 network_disabled=False, name=None, entrypoint=None,\
-                 cpu_shares=None, working_dir=None, domainname=None,\
-                 memswap_limit=None, cpuset=None, host_config=None,\
-                 mac_address=None, labels=None, volume_driver=None,\
-                 stop_signal=None):
+    def __call__(self, *args, **kwargs):
         if self.cli is not None:
-            self._create_container(image, command, hostname, user, detach, stdin_open,\
-                                   tty, mem_limit, ports, environment, dns, volumes,\
-                                   volumes_from, network_disabled, name, entrypoint,\
-                                   cpu_shares, working_dir, domainname, memswap_limit,\
-                                   cpuset, host_config, mac_address, labels, volume_driver,\
-                                   stop_signal)
+            self._create_container(*args, **kwargs)
             if self.warning is not None:
                 print('[Wanring] {message}'.format(message=self.warning))
+            self._start_created_container()
             self._print_created_container()
+            self.cli.close()

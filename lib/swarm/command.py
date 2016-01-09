@@ -1,266 +1,236 @@
 # -*- coding: utf8 -*-
 
-import argparse
-from config import ApiConfig
-from misc import Version, Info
-from container import Containers, StartContainer, StopContainer, RestartContainer, RemoveContainer, CreateContainer
-from image import Images, Tag, RemoveImage
-from utils import base_url_found, current_url_found
+from docker import Client
+from api import SwarmApi
+from utils import current_url_found
 
 class SwarmCommand(object):
-    def __init__(self):
-        self._config = ApiConfig().config
-        self._parser = argparse.ArgumentParser()
-        self._subparsers = self._parser.add_subparsers()
+    def __init__(self, args):
+        self._config = SwarmApi().config
+        self._args = args
         self._commands = {
-            'api': self._swarm_api(),
-            'version': self._swarm_version(),
-            'info': self._swarm_info(),
-            'ps': self._swarm_ps(),
-            'run': self._swarm_run(),
-            'start': self._swarm_start(),
-            'stop': self._swarm_stop(),
-            'restart': self._swarm_restart(),
-            'rm': self._swarm_rm(),
-            'images': self._swarm_images(),
-            'rmi': self._swarm_rmi(),
-            'tag': self._swarm_tag(),
+            'api': self._swarm_api,
+            'version': self._swarm_version,
+            'info': self._swarm_info,
+            'ps': self._swarm_ps,
+            'run': self._swarm_run,
+            'start': self._swarm_start,
+            'stop': self._swarm_stop,
+            'restart': self._swarm_restart,
+            'rm': self._swarm_rm,
+            'images': self._swarm_images,
+            'rmi': self._swarm_rmi,
+            'tag': self._swarm_tag,
         }
 
-    def _add_subparsers(self):
-        self._add_parser_api()
-        if base_url_found:
-            self._add_parser_version()
-            self._add_parser_info()
-            self._add_parser_ps()
-            self._add_parser_start()
-            self._add_parser_stop()
-            self._add_parser_restart()
-            self._add_parser_rm()
-            self._add_parser_run()
-            self._add_parser_images()
-
-    def _add_parser_api(self):
-        parser_api = self._subparsers.add_parser('api', help='\
-Config Swarm API arguments, Otherwise no further command')
-        parser_api.add_argument('command', choices=('get','update','remove','use'),help='\
-Available comamnd: get, update, remove, use')
-        parser_api.add_argument('argument', type=str, help='\
-a comma-separated list for `get`(i.e. name1,name2); \
-a comma-separated list for `update`(i.e. name1=api1,name2=api2); \
-a comma-separated list for `remove`(i.e. name1,name2); \
-set one name as current Swarm API for `use`')
-        parser_api.set_defaults(func=ApiConfig())
-
-    def _add_parser_version(self):
-        parser_version = self._subparsers.add_parser('version', help='\
-Show the Docker version information.')
-        parser_version.set_defaults(func=Version())
-
-    def _add_parser_info(self):
-        parser_info = self._subparsers.add_parser('info', help='\
-Display system-wide information')
-        parser_info.set_defaults(Info())
-
-    def _add_parser_ps(self):
-        parser_ps = self._subparsers.add_parser('ps', help='List containers')
-        parser_ps.add_argument('-a', '--all', action='store_true', help='\
-Show all containers (default shows just running)')
-        parser_ps.add_argument('-f', '--filter', type=str, help='\
-Filter output based on conditions provide, a comma-separated list')
-        parser_ps.add_argument('-l', '--limit', type=str, help='\
-Show containers on nodes provide, a comma-separated list')
-        parser_ps.set_defaults(func=Containers())
-
-    def _add_parser_start(self):
-        parser_start = self._subparsers.add_parser('start', help='\
-Start one or more stopped containers')
-        parser_start.add_argument('CONTAINER', nargs='+', help='\
-Container ID')
-        parser_start.set_defaults(func=StartContainer())
-
-    def _add_parser_stop(self):
-        parser_stop = self._subparsers.add_parser('stop', help='\
-Stop a running container by sending SIGTERM and then SIGKILL after a grace period')
-        parser_stop.add_argument('CONTAINER',nargs='+', help='\
-Container ID')
-        parser_stop.set_defaults(func=StopContainer())
-
-    def _add_parser_restart(self):
-        parser_restart = self._subparsers.add_parser('restart', help='\
-Restart a running container')
-        parser_restart.add_argument('CONTAINER',nargs='+', help='\
-Container ID')
-        parser_restart.set_defaults(func=RestartContainer())
-
-    def _add_parser_rm(self):
-        # add subparser for `swarm rm`
-        parser_rm = self._subparsers.add_parser('rm', help='\
-Remove one or more containers')
-        parser_rm.add_argument('CONTAINER',nargs='+', help='\
-CONTAINER ID')
-        parser_rm.set_defaults(func=RemoveContainer())
-
-    def _add_parser_run(self):
-        parser_run = self._subparsers.add_parser('run', help='\
-Run a command in a new container')
-        parser_run.add_argument('--cpuset-cpus', dest='cpuset', type=str, help='\
-CPUs in which to allow execution (0-3, 0,1)')
-        parser_run.add_argument('-e', '--environment', type=str, help='\
-Set environment variables, a comma-separated list')
-        parser_run.add_argument('--entrypoint', type=str, help='\
-Overwrite the default ENTRYPOINT of the image')
-        parser_run.add_argument('--hostname', type=str, help='\
-Container host name')
-        parser_run.add_argument('-l', '--label', type=str, help='\
-Set meta data on a container')
-        parser_run.add_argument('--link', type=str, help='\
-Add link to another container')
-        parser_run.add_argument('-m', '--memory', type=str, help='\
-Memory limit')
-        parser_run.add_argument('--name', type=str, help='\
-Assign a name to the container')
-        parser_run.add_argument('--net', type=str, help='\
-Set the Network mode for the container')
-        parser_run.add_argument('-P', '--publish-all', action='store_true', help='\
-Publish all exposed ports to random ports')
-        parser_run.add_argument('-p', '--publish', type=str, help='\
-Publish a container\'s port(s) to the host\
-(format: ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort),\
-a comma-separated list')
-        parser_run.add_argument('--privileged', action='store_true', help='\
-Give extended privileges to this container')
-        parser_run.add_argument('--restart', type=str, help='\
-Restart policy to apply when a container exits')
-        parser_run.add_argument('--rm', action='store_true', help='\
-Automatically remove the container when it exits')
-        parser_run.add_argument('-u', '--user', type=str, help='\
-Username or UID')
-        parser_run.add_argument('-v', '--volume', type=str, help='\
-Bind mount a volume, a comma-separated list')
-        parser_run.add_argument('--volumes-from', dest='volumes_from', type=str, help='\
-Mount volumes from the specified container(s), a comma-separated list')
-        parser_run.set_defaults(func=CreateContainer())
-
-    def _add_parser_images(self):
-        parser_images = self._subparsers.add_parser('images', help='\
-List images')
-        parser_images.add_argument('REPOSITORY', nargs='?', default=None, help='\
-Only show images belonging to the repository name')
-        parser_images.add_argument('-a', '--all', action='store_true', help='\
-Show all images (default hides intermediate images)')
-        parser_images.add_argument('-f','--filter',type=str, help='\
-Filter output based on conditions provided, a comma-separated list')
-        parser_images.set_defaults(func=Images())
-
-    def _add_parser_rmi(self):
-        parser_rmi = self._subparsers.add_parser('rmi', help='\
-Remove one or more images')
-        parser_rmi.add_argument('IMAGE', nargs='+', help='\
-IMAGE[:TAG]')
-        parser_rmi.set_defaults(func=RemoveImage())
-
-    def _add_parser_tag(self):
-        parser_tag = self._subparsers.add_parser('tag', help='Tag an image into a repository')
-        parser_tag.add_argument('IMAGE', type=str, help='IMAGE[:TAG]')
-        parser_tag.add_argument('REPOTAG', type=str, help='[REGISTRYHOST/][USERNAME/]NAME[:TAG]')
-        parser_tag.set_defaults(func=Tag())
+    def __call__(self):
+        self._commands[self._args.cmd]()
 
     def _swarm_api(self):
         notice = '[Notice] No swarm api in use'
-        args = self._parser.parse_args()
-        if args.command == 'get':
+        if self._args.command == 'get':
             if not current_url_found(self._config):
                 print(notice)
-            for name in args.argument.split(','):
-                args.func.get_api(name.strip())
-        elif args.command == 'update':
+            for name in self._args.argument:
+                self._args.func.get_api(name)
+        elif self._args.command == 'set':
             if not current_url_found(self._config):
                 print(notice)
-            for item in args.argument.split(','):
-                name, api = item.strip().split('=')
-                args.func.update_api(name, api)
-        elif args.command == 'remove':
+            for item in self._args.argument:
+                name, api = item.split('=')
+                self._args.func.update_api(name, api)
+        elif self._args.command == 'unset':
             if not current_url_found(self._config):
                 print(notice)
-            for name in args.argument.split(','):
-                args.func.remove_api(name.strip())
-        elif args.command == 'use':
-            args.func.use_api(args.argument)
+            for name in self._args.argument:
+                self._args.func.remove_api(name)
+        elif self._args.command == 'version':
+            self._args.func.use_version(self._args.argument[0])
+        elif self._args.command == 'use':
+            self._args.func.use_api(self._args.argument[0])
 
     def _swarm_version(self):
-        args = self._parser.parse_args()
-        args.func()
+        self._args.func()
 
     def _swarm_info(self):
-        args = self._parser.parse_args()
-        args.func()
+        self._args.func()
 
     def _swarm_ps(self):
-        args = self._parser.parse_args()
         filters = {}
-        if args.filter:
-            for item in args.filter.split(','):
-                k, v = item.strip().split('=')
-                filters[k] = v
-        if args.limit:
-            limit = tuple([n.strip() for n in args.limit.split(',')])
+        if self._args.filter is not None:
+            for item in self._args.filter:
+                if item.count('=') == 1:
+                    k, v = item.split('=')
+                    filters[k] = v
+                else:
+                    print('bad format of filter (expected name=value)')
+                    exit(1)
+        if self._args.limit is not None:
+            limit = tuple(self._args.limit)
         else:
             limit = None
-        args.func(show_all=args.all,filters=filters,limit=limit)
+        self._args.func(show_all=self._args.all,filters=filters,limit=limit)
 
     def _swarm_run(self):
-        pass
+        labels = None
+        links = None
+        ports = None
+        port_bindings = None
+        volumes = None
+        # handle container lables
+        if self._args.label is not None:
+            labels = {}
+            for item in self._args.label:
+                if item.count('=') == 1:
+                    name, value = item.split('=')
+                    labels[name] = value
+                else:
+                    print('bad format of label (expected name=value)')
+                    exit(1)
+        # handle container link
+        if self._args.link is not None:
+            links = {}
+            for item in self._args.link:
+                if item.count(':') == 0:
+                    name = alias = item
+                elif item.count(':') == 1:
+                    name, value = item.split(':')
+                else:
+                    print('bad format for link (expected name:alias)')
+                    exit(1)
+                links[name] = alias
+        # handle published ports
+        if self._args.publish is not None:
+            ports = []
+            port_bindings = {}
+            for item in self._args.publish:
+                # expected format: ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort
+                if item.count(':') == 0:
+                    containerPort = item
+                    port_bindings[containerPort] = None
+                elif item.count(':') == 1:
+                    hostPort, containerPort = item.split(':')
+                    port_bindings[containerPort] = hostPort
+                elif item.count(':') == 2:
+                    hostIp, hostPort, containerPort = item.split(':')
+                    port_bindings[containerPort] = (hostIp, hostPort) if hostPort else (hostIp,)
+                else:
+                    print('bad format of publish \
+(expected ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort')
+                    exit(1)
+                if containerPort.find('/udp') > 0:
+                    containerPort, protocol = containerPort.split('/')
+                    ports.append((containerPort, protocol))
+                else:
+                    ports.append(containerPort)
+        # handler container volumes
+        if self._args.volume is not None:
+            volumes = []
+            for item in self._args.volume:
+                # expected format: containerPath | hostPath:containerPath | hostPath:containerPath:[ro|rw]
+                if item.count(':') == 0:
+                    volumes.append(item)
+                elif item.count(':') == 1:
+                    volumes.append(item[1])
+                elif item.count(':') == 2:
+                    volumes.append(item[1])
+                else:
+                    print('bad format of volume \
+(expected containerPath | hostPath:containerPath | hostPath:containerPath:[ro|rw]')
+        # handle command
+        _command = []
+        if self._args.COMMAND is not None:
+            _command.append(self._args.COMMAND)
+        if self._args.ARG is not None:
+            _command.extend(self._args.ARG)
+        command = _command if _command else None
+        # create host config
+        host_config = Client().create_host_config(binds=self._args.volume,\
+                                                  port_bindings=port_bindings,\
+                                                  publish_all_ports=self._args.publish_all,\
+                                                  links=links,\
+                                                  privileged=self._args.privileged,\
+                                                  volumes_from=self._args.volumes_from,\
+                                                  network_mode=self._args.net,\
+                                                  restart_policy=self._args.restart,\
+                                                  mem_limit=self._args.memory)
+        # build kwargs
+        #print(host_config)
+        image = self._args.IMAGE
+        kwargs = {
+            'command': command,
+            'hostname': self._args.hostname,
+            'user': self._args.user,
+            'detach': self._args.detach,
+            'stdin_open': self._args.interactive,
+            'tty': self._args.tty,
+            'ports': ports,
+            'environment': self._args.environment,
+            'dns': None,
+            'volumes': volumes,
+            'network_disabled': False,
+            'name': self._args.name,
+            'entrypoint': self._args.entrypoint,
+            'cpu_shares': None,
+            'working_dir': None,
+            'domainname': None,
+            'memswap_limit': None,
+            'cpuset': self._args.cpuset_cpus,
+            'host_config': host_config,
+            'mac_address': None,
+            'labels': labels,
+            'volume_driver': None,
+            'stop_signal': None,
+        }
+        self._args.func(image, command=kwargs['command'], hostname=kwargs['hostname'],\
+                        user=kwargs['user'],detach=kwargs['detach'],stdin_open=kwargs['stdin_open'],\
+                        tty=kwargs['tty'], mem_limit=None,ports=kwargs['ports'],\
+                        environment=kwargs['environment'],dns=kwargs['dns'],volumes=kwargs['volumes'],\
+                        volumes_from=None,network_disabled=kwargs['network_disabled'],\
+                        name=kwargs['name'],entrypoint=kwargs['entrypoint'],\
+                        cpu_shares=kwargs['cpu_shares'],working_dir=kwargs['working_dir'],\
+                        domainname=kwargs['domainname'],memswap_limit=kwargs['memswap_limit'],\
+                        cpuset=kwargs['cpuset'],host_config=kwargs['host_config'],\
+                        mac_address=kwargs['mac_address'],labels=kwargs['labels'],\
+                        volume_driver=kwargs['volume_driver'],stop_signal=kwargs['stop_signal'])
 
     def _swarm_start(self):
-        args = self._parser.parse_args()
-        args.func(tuple(args.CONTAINER))
+        self._args.func(tuple(self._args.CONTAINER))
 
     def _swarm_stop(self):
-        args = self._parser.parse_args()
-        args.func(tuple(args.CONTAINER))
+        self._args.func(tuple(self._args.CONTAINER))
 
     def _swarm_restart(self):
-        args = self._parser.parse_args()
-        args.func(tuple(args.CONTAINER))
+        self._args.func(tuple(self._args.CONTAINER))
 
     def _swarm_rm(self):
-        args = self._parser.parse_args()
-        args.func(tuple(args.CONTAINER))
+        self._args.func(tuple(self._args.CONTAINER))
 
     def _swarm_images(self):
-        args = self._parser.parse_args()
         filters = {}
-        if args.filter:
-            for item in args.filter.split(','):
+        if self._args.filter:
+            for item in self._args.filter.split(','):
                 k, v = item.strip().split('=')
                 filters[k] = v
-        args.func(name=args.REPOSITORY,show_all=args.all,filters=filters)
+        self._args.func(name=self._args.REPOSITORY,show_all=self._args.all,filters=filters)
 
     def _swarm_rmi(self):
-        args = self._parser.parse_args()
         images = set()
-        for image_name in args.IMAGE:
+        for image_name in self._args.IMAGE:
             # tag defaults to 'latest' if not provide
             if len(image_name.split(':')) == 1:
                 image = ''.join((image_name.split(':')[0], ':', 'latest'))
             else:
                 image = image_name
             images.add(image)
-        args.func(tuple(images))
+        self._args.func(tuple(images))
 
     def _swarm_tag(self):
-        args = self._parser.parse_args()
-        repo_name = args.REPOTAG.split(':', 1)
+        repo_name = self._args.REPOTAG.split(':', 1)
         # tag defaults to 'latest' if not provide
         if len(repo_name) == 1:
             repo = repo_name[0]
             tag = 'latest'
         else:
             repo, tag = repo_name
-        args.func(args.IMAGE, repo, tag)
-
-    def run(self):
-        self._add_subparsers()
-        args = self._parser.parse_args()
-        self._commands[args.func.__class__.__name__]
+        self._args.func(self._args.IMAGE, repo, tag)

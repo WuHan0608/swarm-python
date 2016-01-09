@@ -2,11 +2,11 @@
 
 import json
 from docker import Client
-from config import ApiConfig
+from api import SwarmApi
 
-class Docker(object):
+class SwarmClient(object):
     def __init__(self):
-        self._config = ApiConfig().config
+        self._config = SwarmApi().config
 
     def _get_base_url(self):
         try:
@@ -21,9 +21,8 @@ class Docker(object):
         except IOError as e:
             print('No available swarm api')
             exit(1)
-        except OSError as e:
-            print(e)
-            exit(2)
+        except OSError:
+            raise
 
     def _get_version(self):
         try:
@@ -36,9 +35,10 @@ class Docker(object):
             except KeyError:
                 return
         except IOError as e:
+            print(e)
             return
         except OSError:
-            return
+            raise
 
     @property
     def client(self):
@@ -47,4 +47,8 @@ class Docker(object):
             return Client(base_url, version=self._get_version())
         print('No available swarm api')
         return
-        
+    
+    @property
+    def version(self):
+        return self._get_version()
+    
