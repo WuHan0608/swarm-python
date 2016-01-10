@@ -11,7 +11,7 @@ Swarm CLI Developed by Python
         PYTHONPATH=/usr/local/swarm-python/lib
         export PYTHONPATH
 
-* issue the following command, ensure the environment variable takes effict
+* issue the following command, ensure the environment variable takes effect
 
         $ source ~/.bash_profile
         $ echo $PYTHONPATH
