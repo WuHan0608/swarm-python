@@ -4,8 +4,8 @@ import argparse
 from api import SwarmApi
 from misc import Version, Info
 from container import Containers, StartContainer, StopContainer, RestartContainer,\
-                      RemoveContainer, CreateContainer, InspectContainer
-from image import Images, RemoveImage, Tag, InspectImage
+                      RemoveContainer, CreateContainer, InspectContainer, Top
+from image import Images, RemoveImage, Tag, InspectImage, Pull
 from utils import base_url_found
 
 class SwarmArgumentParser(object):
@@ -26,10 +26,12 @@ class SwarmArgumentParser(object):
             'restart': 'docker restart [OPTIONS] CONTAINER [CONTAINER...]',
             'rm': 'docker rm [OPTIONS] CONTAINER [CONTAINER...]',
             'run': 'docker run [OPTIONS] IMAGE [COMMAND] [ARG...]',
+            'top': 'docker top [OPTIONS] CONTAINER [ps OPTIONS]',
             'inspect': 'docker inspect [OPTIONS] CONTAINER|IMAGE [CONTAINER|IMAGE...]',
             'images': 'docker images [OPTIONS] [REPOSITORY]',
             'rmi': 'docker rmi [OPTIONS] IMAGE [IMAGE...]',
             'tag': 'docker tag [OPTIONS] IMAGE[:TAG] [REGISTRYHOST/][USERNAME/]NAME[:TAG]',
+            'pull': 'docker pull [OPTIONS] NAME[:TAG]',
         }
         self._help = {
             'api': 'Config Swarm API, otherwise no further command is available',
@@ -41,10 +43,12 @@ class SwarmArgumentParser(object):
             'restart': 'Restart a running container',
             'rm': 'Remove one or more containers',
             'run': 'Run a command in a new container',
+            'top': 'Display the running processes of a container',
             'inspect': 'Return low-level information on a container or image',
             'images': 'List images',
             'rmi': 'Remove one or more images',
             'tag': 'Tag an image into a repository',
+            'pull': 'Pull an image or a repository from a registry',
         }
 
     def parse_args(self):
@@ -60,8 +64,10 @@ class SwarmArgumentParser(object):
             self._add_parser_run()
             self._add_parser_images()
             self._add_parser_inspect()
+            self._add_parser_top()
             self._add_parser_rmi()
             self._add_parser_tag()
+            self._add_parser_pull()
         return self._parser.parse_args()
 
     def _add_parser_api(self):
@@ -94,13 +100,15 @@ help=self._help['info'], usage=self._usage['info'])
 
     def _add_parser_ps(self):
         parser_ps = self._subparsers.add_parser('ps', description=self._help['ps'],\
-help=self._help['ps'], usage=self._usage['ps'])
+help=self._help['ps'], usage=self._usage['ps'], formatter_class=argparse.RawTextHelpFormatter)
         parser_ps.add_argument('-a', '--all', action='store_true', help='\
 Show all containers (default shows just running)')
         parser_ps.add_argument('-f', '--filter', action='append', help='\
 Filter output based on the conditions provide', metavar='name=value')
-        parser_ps.add_argument('-l', '--limit', action='append', help='\
-Show containers of the specific node', metavar='NODE')
+        parser_ps.add_argument('-l', '--limit', action='append', metavar='NODE', help='\
+Show containers of the specific nodes\n\
+e.g. -l web.example.com -l mail.example.com\n\
+     -l db[01:08].example.com -l db10.example.com')
         parser_ps.set_defaults(func=Containers())
         parser_ps.set_defaults(cmd='ps')
 
@@ -196,6 +204,16 @@ Mount volumes from the specified container(s)')
         parser_run.set_defaults(func=CreateContainer())
         parser_run.set_defaults(cmd='run')
 
+    def _add_parser_top(self):
+        parser_top = self._subparsers.add_parser('top', description=self._help['top'],\
+help=self._help['top'], usage=self._usage['top'])
+        parser_top.add_argument('CONTAINER', type=str, help='\
+Container ID')
+        parser_top.add_argument('ps_args', nargs='?', metavar='ps OPTIONS', help='\
+e.g., aux')
+        parser_top.set_defaults(func=Top())
+        parser_top.set_defaults(cmd='top')
+
     def _add_parser_inspect(self):
         parser_inspect = self._subparsers.add_parser('inspect', description=self._help['inspect'],\
 help=self._help['inspect'], usage=self._usage['inspect'])
@@ -239,3 +257,16 @@ IMAGE[:TAG]')
 [REGISTRYHOST/][USERNAME/]NAME[:TAG]')
         parser_tag.set_defaults(func=Tag())
         parser_tag.set_defaults(cmd='tag')
+
+    def _add_parser_pull(self):
+        parser_pull = self._subparsers.add_parser('pull', description=self._help['pull'],\
+help=self._help['pull'], usage=self._usage['pull'])
+        parser_pull.add_argument('REPOTAG', type=str, metavar='NAME[:TAG]', help='\
+Image name with optional tag')
+        parser_pull.add_argument('--insecure', action='store_true', help='\
+Use an insecure registry')
+        parser_pull.add_argument('--auth', type=str, metavar='username:password', help='\
+Override credentials for client login')
+        parser_pull.set_defaults(func=Pull())
+        parser_pull.set_defaults(cmd='pull')
+        

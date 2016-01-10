@@ -1,5 +1,6 @@
 # -*- coding: utf8 -*-
 
+import json
 from docker import errors
 from datetime import datetime
 from base import SwarmClient
@@ -36,7 +37,7 @@ class Images(object):
             return
         if ret:
             for image in ret:
-                # if image_list provide, then get images by it
+                # if image_list provide, then get images against it
                 if image_list is not None:
                     if not image['Id'].startswith(image_list) and\
                       not image['RepoTags'].startswith(image_list):
@@ -124,7 +125,7 @@ class RemoveImage(Images):
                     images_err.add(image)
             # exclude images in image_error
             images_removed = tuple((image for image in image_list\
-                                            if not image in images_error))
+                                            if not image in images_err))
             self._get_images(images_removed)
 
             if not self.images and images_removed:
@@ -187,4 +188,35 @@ class InspectImage(Images):
                 except errors.DockerException as e:
                     print(e.explanation)
             self.cli.close()
-            return ret if ret else None     
+            return ret if ret else None
+
+class Pull(Images):
+    """
+    Similar to `docker pull`
+    """
+    def __init__(self):
+        super(Pull, self).__init__()
+
+    def __call__(self, repo, tag, insecure_registry, auth_config):
+        """
+        :param repo(str): The repository to pull
+        :param tag(str): The tag to pull
+        :param insecure_registry(bool): Use an insecure registry
+        :param auth_config(dict):  Override the credentials that Client.login has set for this request auth_config should contain the username and password keys to be valid
+        """
+        if self.cli is not None:
+            try:
+                for line in self.cli.pull(repo, tag=tag, stream=True,\
+                                        insecure_registry=insecure_registry,\
+                                        auth_config=auth_config):
+                    ret = json.loads(line)
+                    print('[{id}] {status}'.format(id=ret['id'],\
+                                                  status=ret['status']))
+            except errors.NotFound as e:
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
+            except errors.DockerException as e:
+                print(e.explanation)
+            finally:
+                self.cli.close()

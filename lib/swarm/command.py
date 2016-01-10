@@ -2,7 +2,7 @@
 
 from docker import Client
 from api import SwarmApi
-from utils import current_url_found
+from utils import current_url_found, detect_range, expand_hostname_range
 from pprint import pprint
 
 class SwarmCommand(object):
@@ -19,10 +19,12 @@ class SwarmCommand(object):
             'stop': self._swarm_stop,
             'restart': self._swarm_restart,
             'rm': self._swarm_rm,
+            'top': self._swarm_top,
             'inspect': self._swarm_inspect,
             'images': self._swarm_images,
             'rmi': self._swarm_rmi,
             'tag': self._swarm_tag,
+            'pull': self._swarm_pull,
         }
 
     def __call__(self):
@@ -68,7 +70,13 @@ class SwarmCommand(object):
                     print('bad format of filter (expected name=value)')
                     exit(1)
         if self._args.limit is not None:
-            limit = tuple(self._args.limit)
+            limit = []
+            for node in self._args.limit:
+                if detect_range(node):
+                    limit.extend(expand_hostname_range(node))
+                else:
+                    limit.append(node)
+            limit = tuple(limit)
         else:
             limit = None
         self._args.func(show_all=self._args.all,filters=filters,limit=limit)
@@ -209,6 +217,9 @@ class SwarmCommand(object):
         self._args.func(tuple(self._args.CONTAINER), self._args.volumes,\
                                         self._args.force, self._args.link)
 
+    def _swarm_top(self):
+        self._args.func(self._args.CONTAINER, self._args.ps_args)
+
     def _swarm_inspect(self):
         # print container or image inspect if type is provide
         if self._args.type is not None:
@@ -231,19 +242,18 @@ class SwarmCommand(object):
         filters = {}
         if self._args.filter:
             for item in self._args.filter.split(','):
-                k, v = item.strip().split('=')
-                filters[k] = v
+                if item.count('=') == 1:
+                    k, v = item.split('=')
+                    filters[k] = v
+                else:
+                    print('bad format for filter (expected name=value)')
+                    exit(1)
         self._args.func(name=self._args.REPOSITORY,show_all=self._args.all,filters=filters)
 
     def _swarm_rmi(self):
         images = set()
         for image_name in self._args.IMAGE:
-            # tag defaults to 'latest' if not provide
-            if len(image_name.split(':')) == 1:
-                image = ''.join((image_name.split(':')[0], ':', 'latest'))
-            else:
-                image = image_name
-            images.add(image)
+            images.add(image_name)
         self._args.func(tuple(images))
 
     def _swarm_tag(self):
@@ -251,7 +261,27 @@ class SwarmCommand(object):
         # tag defaults to 'latest' if not provide
         if len(repo_name) == 1:
             repo = repo_name[0]
-            tag = 'latest'
+            tag = None
         else:
             repo, tag = repo_name
         self._args.func(self._args.IMAGE, repo, tag, self._args.force)
+
+    def _swarm_pull(self):
+        auth_config = None
+        repo_name = self._args.REPOTAG.split(':', 1)
+        if len(repo_name) == 1:
+            repo = repo_name[0]
+            tag = None
+        else:
+            repo, tag = repo_name
+        if self._args.auth is not None:
+            if self._args.auth.count(':') == 1:
+                user, passwd = self._args.auth.split(':')
+            else:
+                print('bad format for auth (expected username:password)')
+                exit(1)
+            auth_config = {
+                'username': username,
+                'password': password
+            }
+        self._args.func(repo, tag, self._args.insecure, auth_config)

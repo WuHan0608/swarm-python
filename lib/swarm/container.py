@@ -63,7 +63,7 @@ class ContainersBase(object):
         """
         :param show_all(bool): Show all containers. Only running containers are shown by default
         :param filters(dict): Filters to be processed on the image list
-        :parma limit(tuple or list): Filter containers by node
+        :parma limit(tuple or list): Filter containers by node name or node pattern
         :param latest(bool): Show only the latest created container, include non-running ones
         :param since(str): Show only containers created since Id or Name, include non-running ones
         :param container_list(list): List containes container ids
@@ -123,8 +123,8 @@ class ContainersBase(object):
                                                                             s4=s4)
             # pretty-print string defined by title
             string = ''
-            for node in sorted(self.nodes):
-                for data in self.nodes[node]:
+            for node in sorted(self.containers):
+                for data in self.containers[node]:
                     cid, node, created, status, names = data
                     s1 = ' ' * blank
                     s2 = ' ' * (self.node_length+blank-len(node))
@@ -240,7 +240,7 @@ class RemoveContainer(ContainersBase):
             if containers_removed is not None:
                 self._get_containers(show_all=True,\
                                      container_list=containers_removed)
-                if not self.nodes and containers_removed:
+                if not self.containers and containers_removed:
                     print('Succeed to remove container {containers}'.format(\
                                             containers=', '.join(containers_removed)))
             self.cli.close()
@@ -315,3 +315,50 @@ class InspectContainer(ContainersBase):
                     print(e.explanation)
             self.cli.close()
             return ret if ret else None
+
+class Top(ContainersBase):
+    """
+    Similar to `docker top`
+    """
+    def __init__(self):
+        super(Top, self).__init__()
+
+    def _pretty_print(self):
+        string = ''
+        length = []
+        for title in self.ret['Titles']:
+            length.append(len(title))
+        for process in self.ret['Processes']:
+            for value in process:
+                i = process.index(value)
+                if len(value) > length[i]:
+                    length[i] = len(value)
+        for title in self.ret['Titles']:
+            i = self.ret['Titles'].index(title)
+            string += title + ' ' * (length[i]-len(title)+4)
+        string += '\n'
+        for process in self.ret['Processes']:
+            for value in process:
+                i = process.index(value)
+                string += value + ' ' * (length[i]-len(value)+4)
+            string += '\n'
+        print(string.strip())
+
+    def __call__(self, container, ps_args):
+        """
+        :param container(str): The container to inspect
+        :param ps_args(str): An optional arguments passed to ps (e.g., aux)
+        """
+        if self.cli is not None:
+            processes = []
+            try:
+                self.ret = self.cli.top(container, ps_args)
+            except errors.NotFound as e:
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
+            except errors.DockerException as e:
+                print(e.explanation)
+            self._pretty_print()
+            self.cli.close()
+
