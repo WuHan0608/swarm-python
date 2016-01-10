@@ -3,8 +3,9 @@
 import argparse
 from api import SwarmApi
 from misc import Version, Info
-from container import Containers, StartContainer, StopContainer, RestartContainer, RemoveContainer, CreateContainer
-from image import Images, Tag, RemoveImage
+from container import Containers, StartContainer, StopContainer, RestartContainer,\
+                      RemoveContainer, CreateContainer, InspectContainer
+from image import Images, RemoveImage, Tag, InspectImage
 from utils import base_url_found
 
 class SwarmArgumentParser(object):
@@ -25,6 +26,7 @@ class SwarmArgumentParser(object):
             'restart': 'docker restart [OPTIONS] CONTAINER [CONTAINER...]',
             'rm': 'docker rm [OPTIONS] CONTAINER [CONTAINER...]',
             'run': 'docker run [OPTIONS] IMAGE [COMMAND] [ARG...]',
+            'inspect': 'docker inspect [OPTIONS] CONTAINER|IMAGE [CONTAINER|IMAGE...]',
             'images': 'docker images [OPTIONS] [REPOSITORY]',
             'rmi': 'docker rmi [OPTIONS] IMAGE [IMAGE...]',
             'tag': 'docker tag [OPTIONS] IMAGE[:TAG] [REGISTRYHOST/][USERNAME/]NAME[:TAG]',
@@ -39,6 +41,7 @@ class SwarmArgumentParser(object):
             'restart': 'Restart a running container',
             'rm': 'Remove one or more containers',
             'run': 'Run a command in a new container',
+            'inspect': 'Return low-level information on a container or image',
             'images': 'List images',
             'rmi': 'Remove one or more images',
             'tag': 'Tag an image into a repository',
@@ -56,6 +59,7 @@ class SwarmArgumentParser(object):
             self._add_parser_rm()
             self._add_parser_run()
             self._add_parser_images()
+            self._add_parser_inspect()
             self._add_parser_rmi()
             self._add_parser_tag()
         return self._parser.parse_args()
@@ -111,6 +115,8 @@ Container ID')
     def _add_parser_stop(self):
         parser_stop = self._subparsers.add_parser('stop', description=self._help['stop'],\
 help=self._help['stop'], usage=self._usage['stop'])
+        parser_stop.add_argument('-t', '--time', type=int, default=10, help='\
+Seconds to wait for stop before killing it (Default 10 seconds)')
         parser_stop.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
         parser_stop.set_defaults(func=StopContainer())
@@ -119,6 +125,8 @@ Container ID')
     def _add_parser_restart(self):
         parser_restart = self._subparsers.add_parser('restart', description=self._help['restart'],\
 help=self._help['restart'], usage=self._usage['restart'])
+        parser_restart.add_argument('-t', '--time', type=int, default=10, help='\
+Seconds to wait for stop before killing it (Default 10 seconds)')
         parser_restart.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
         parser_restart.set_defaults(func=RestartContainer())
@@ -128,6 +136,12 @@ Container ID')
         # add subparser for `swarm rm`
         parser_rm = self._subparsers.add_parser('rm', description=self._help['rm'],\
 help=self._help['rm'], usage=self._usage['rm'])
+        parser_rm.add_argument('-f', '--force', action='store_true', help='\
+Force the removal of a running container (uses SIGKILL)')
+        parser_rm.add_argument('-l', '--link', action='store_true', help='\
+Remove the specified link')
+        parser_rm.add_argument('-v', '--volumes', action='store_true', help='\
+Remove the volumes associated with the container')
         parser_rm.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
         parser_rm.set_defaults(func=RemoveContainer())
@@ -182,6 +196,17 @@ Mount volumes from the specified container(s)')
         parser_run.set_defaults(func=CreateContainer())
         parser_run.set_defaults(cmd='run')
 
+    def _add_parser_inspect(self):
+        parser_inspect = self._subparsers.add_parser('inspect', description=self._help['inspect'],\
+help=self._help['inspect'], usage=self._usage['inspect'])
+        parser_inspect.add_argument('--type', choices=('image', 'container'), help='\
+Return JSON for specified type, (e.g image or container)')
+        parser_inspect.add_argument('OBJECT', nargs='+', metavar='CONTAINER|IMAGE', help='\
+id or name of container|image')
+        parser_inspect.set_defaults(inspect_container=InspectContainer())
+        parser_inspect.set_defaults(inspect_image=InspectImage())
+        parser_inspect.set_defaults(cmd='inspect')
+
     def _add_parser_images(self):
         parser_images = self._subparsers.add_parser('images', description=self._help['images'],\
 help=self._help['images'], usage=self._usage['images'], formatter_class=argparse.RawTextHelpFormatter)
@@ -206,7 +231,11 @@ IMAGE[:TAG]')
     def _add_parser_tag(self):
         parser_tag = self._subparsers.add_parser('tag', description=self._help['tag'],\
 help=self._help['tag'], usage=self._usage['tag'])
-        parser_tag.add_argument('IMAGE', type=str, help='IMAGE[:TAG]')
-        parser_tag.add_argument('REPOTAG', type=str, help='[REGISTRYHOST/][USERNAME/]NAME[:TAG]')
+        parser_tag.add_argument('-f', '--force', action='store_true', help='\
+Force')
+        parser_tag.add_argument('IMAGE', type=str, help='\
+IMAGE[:TAG]')
+        parser_tag.add_argument('REPOTAG', type=str, help='\
+[REGISTRYHOST/][USERNAME/]NAME[:TAG]')
         parser_tag.set_defaults(func=Tag())
         parser_tag.set_defaults(cmd='tag')

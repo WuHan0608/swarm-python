@@ -3,6 +3,7 @@
 from docker import Client
 from api import SwarmApi
 from utils import current_url_found
+from pprint import pprint
 
 class SwarmCommand(object):
     def __init__(self, args):
@@ -18,6 +19,7 @@ class SwarmCommand(object):
             'stop': self._swarm_stop,
             'restart': self._swarm_restart,
             'rm': self._swarm_rm,
+            'inspect': self._swarm_inspect,
             'images': self._swarm_images,
             'rmi': self._swarm_rmi,
             'tag': self._swarm_tag,
@@ -152,7 +154,7 @@ class SwarmCommand(object):
                                                   privileged=self._args.privileged,\
                                                   volumes_from=self._args.volumes_from,\
                                                   network_mode=self._args.net,\
-                                                  restart_policy=self._args.restart,\
+                                                  restart_policy={'Name': self._args.restart},\
                                                   mem_limit=self._args.memory)
         # build kwargs
         #print(host_config)
@@ -198,13 +200,32 @@ class SwarmCommand(object):
         self._args.func(tuple(self._args.CONTAINER))
 
     def _swarm_stop(self):
-        self._args.func(tuple(self._args.CONTAINER))
+        self._args.func(tuple(self._args.CONTAINER), self._args.time)
 
     def _swarm_restart(self):
-        self._args.func(tuple(self._args.CONTAINER))
+        self._args.func(tuple(self._args.CONTAINER), self._args.time)
 
     def _swarm_rm(self):
-        self._args.func(tuple(self._args.CONTAINER))
+        self._args.func(tuple(self._args.CONTAINER), self._args.volumes,\
+                                        self._args.force, self._args.link)
+
+    def _swarm_inspect(self):
+        # print container or image inspect if type is provide
+        if self._args.type is not None:
+            if self._args.type == 'container':
+                ret = self._args.inspect_container(self._args.OBJECT)
+            elif self._args.type == 'image':
+                ret = self._args.inspect_image(self._args.OBJECT)
+            if ret is not None:
+                pprint(ret)
+        else:
+        # print both otherwise
+            ret = []
+            for data in (self._args.inspect_container(self._args.OBJECT),\
+                            self._args.inspect_image(self._args.OBJECT)):
+                if data is not None:
+                    ret.extend(data)
+            pprint(ret)
 
     def _swarm_images(self):
         filters = {}
@@ -233,4 +254,4 @@ class SwarmCommand(object):
             tag = 'latest'
         else:
             repo, tag = repo_name
-        self._args.func(self._args.IMAGE, repo, tag)
+        self._args.func(self._args.IMAGE, repo, tag, self._args.force)

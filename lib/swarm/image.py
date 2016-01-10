@@ -21,10 +21,20 @@ class Images(object):
         :param name(str): Only show images belonging to the repository name
         :param show_all(bool):  Show all images (by default filter out the intermediate image layers)
         :parma filters(dict): Filters to be processed on the image list
+        :param image_list(list): List of image id or name
         """
-        if self.cli is not None:
+        try:
             ret = self.cli.images(name=name,all=show_all,filters=filters)
-            self.cli.close()
+        except errors.NotFound as e:
+            print(e.explanation)
+            return
+        except errors.APIError as e:
+            print(e.explanation)
+            return
+        except errors.DockerException:
+            print(e.explanation)
+            return
+        if ret:
             for image in ret:
                 # if image_list provide, then get images by it
                 if image_list is not None:
@@ -86,8 +96,41 @@ class Images(object):
             print('{title}\n{string}'.format(title=title,string=string.rstrip()))
 
     def __call__(self, name=None, show_all=False, filters={}):
-        self._get_images(name=name,show_all=show_all,filters=filters)
-        self._pretty_print()
+        if self.cli is not None:
+            self._get_images(name=name,show_all=show_all,filters=filters)
+            self._pretty_print()
+
+class RemoveImage(Images):
+    """
+    Similar to `docker rmi`
+    """
+    def __init__(self):
+        super(RemoveImage, self).__init__()
+
+    def __call__(self, image_list):
+        if self.cli is not None:
+            images_err = set()
+            for image in image_list:
+                try:
+                    self.cli.remove_image(image)
+                except errors.NotFound as e:
+                    print(e.explanation)
+                    images_err.add(image)
+                except errors.APIError as e:
+                    print(e.explanation)
+                    images_err.add(image)
+                except errors.DockeException as e:
+                    print(e.explanation)
+                    images_err.add(image)
+            # exclude images in image_error
+            images_removed = tuple((image for image in image_list\
+                                            if not image in images_error))
+            self._get_images(images_removed)
+
+            if not self.images and images_removed:
+                print('Succeed to remove image {images}'.format(\
+                                            images=', '.join(images_removed)))
+            self.cli.close()
 
 class Tag(Images):
     """
@@ -96,10 +139,16 @@ class Tag(Images):
     def __init__(self):
         super(Tag, self).__init__()
 
-    def __call__(self, image, repo, tag):
+    def __call__(self, image, repo, tag, force):
+        """
+        :param image(str): The image to tag
+        :param repo(str): The repository to set for the tag
+        :param tag(str): The tag name
+        :param force(bool): Force
+        """
         if self.cli is not None:
             try:
-                ret = self.cli.tag(image, repo, tag, force=True)
+                ret = self.cli.tag(image, repo, tag, force)
             except errors.NotFound as e:
                 print(e.explanation)
             except errors.APIError as e:
@@ -115,34 +164,27 @@ class Tag(Images):
                                                             repo=repo,\
                                                             tag=tag))
 
-class RemoveImage(Images):
+class InspectImage(Images):
     """
-    Similar to `docker rmi`
+    Similar to `docker inspect`, but only for images
     """
     def __init__(self):
-        super(RemoveImage, self).__init__()
+        super(InspectImage, self).__init__()
 
     def __call__(self, image_list):
+        """
+        :param image_list(list): List of image id or names
+        """
         if self.cli is not None:
-            image_error = set()
+            ret = []
             for image in image_list:
                 try:
-                    self.cli.remove_image(image)
+                    ret.append(self.cli.inspect_image(image))
                 except errors.NotFound as e:
                     print(e.explanation)
-                    image_error.add(image)
                 except errors.APIError as e:
                     print(e.explanation)
-                    image_error.add(image)
-                except errors.DockeException as e:
+                except errors.DockerException as e:
                     print(e.explanation)
-                    image_error.add(image)
-                finally:
-                    self.cli.close()
-            # exclude images in image_error
-            image_removed = tuple([image for image in image_list\
-                                            if not image in image_error])
-            self._get_images(image_removed)
-            if not self.images and image_removed:
-                print('Succeed to remove image {images}'.format(\
-                                            images=', '.join(image_removed)))
+            self.cli.close()
+            return ret if ret else None     

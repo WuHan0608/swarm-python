@@ -18,7 +18,7 @@ class SwarmClient(object):
                 return
             except KeyError:
                 return
-        except IOError as e:
+        except IOError:
             print('No available swarm api')
             exit(1)
         except OSError:
