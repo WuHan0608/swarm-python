@@ -12,9 +12,9 @@ class Images(object):
     """
     def __init__(self):
         self.cli = SwarmClient().client
-        self.repo_length = 10    # `REPOSITORY` length
-        self.tag_length = 3      # `TAG` length
-        self.created_length = 7  # `CREATED` length
+        self.repo_length = len('REPOSITORY')
+        self.tag_length = len('TAG')
+        self.created_length = len('CREATED')
         self.images = set()
 
     def _get_images(self, name=None, show_all=False, filters={}, image_list=None):

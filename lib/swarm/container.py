@@ -12,9 +12,9 @@ class ContainersBase(object):
     def __init__(self):
         self.cli = SwarmClient().client
         self.containers = {}
-        self.node_length = 4     # `node` length
-        self.created_length = 7  # `created` length
-        self.status_length = 6   # `status` length
+        self.node_length = len('NODE')
+        self.created_length = len('CREATED')
+        self.status_length = len('STATUS')
 
     def _handle_containers(self, command, container_list, **kwargs):
         """
@@ -92,7 +92,11 @@ class ContainersBase(object):
                     if not node in limit:
                         continue
                 # 'Names' includes self container name as well as names of linked containers
-                names = ','.join([name.split('/', 2)[2] for name in container['Names']])
+                # Filter name by checking '/'
+                for names in container['Names']:
+                    if names.count('/') == 2:
+                        name = names.split('/')[2]
+                        break
                 # convert created timestamp to human-readable string
                 created_delta = datetime.now() - datetime.fromtimestamp(container['Created'])
                 if created_delta.days > 1:
@@ -105,7 +109,7 @@ class ContainersBase(object):
                 self.status_length = len(container['Status']) if len(container['Status']) > self.status_length\
                                                                                         else self.status_length
                  # (Id, Node, Created, Status, Names)
-                data = (container['Id'], node, created, container['Status'], names)
+                data = (container['Id'], node, created, container['Status'], name)
                 self.containers.setdefault(node, []).append(data)
 
     def _pretty_print(self):
