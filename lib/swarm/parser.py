@@ -4,7 +4,7 @@ import argparse
 from api import SwarmApi
 from misc import Version, Info
 from container import Containers, StartContainer, StopContainer, RestartContainer,\
-                      RemoveContainer, CreateContainer, InspectContainer, Top
+                      RemoveContainer, CreateContainer, InspectContainer, Top, Exec
 from image import Images, RemoveImage, Tag, InspectImage, Pull
 from utils import base_url_found
 
@@ -26,6 +26,7 @@ class SwarmArgumentParser(object):
             'restart': 'docker restart [OPTIONS] CONTAINER [CONTAINER...]',
             'rm': 'docker rm [OPTIONS] CONTAINER [CONTAINER...]',
             'run': 'docker run [OPTIONS] IMAGE [COMMAND] [ARG...]',
+            'exec': 'docker exec [OPTIONS] CONTAINER COMMAND [ARG...]',
             'top': 'docker top [OPTIONS] CONTAINER [ps OPTIONS]',
             'inspect': 'docker inspect [OPTIONS] CONTAINER|IMAGE [CONTAINER|IMAGE...]',
             'images': 'docker images [OPTIONS] [REPOSITORY]',
@@ -43,6 +44,7 @@ class SwarmArgumentParser(object):
             'restart': 'Restart a running container',
             'rm': 'Remove one or more containers',
             'run': 'Run a command in a new container',
+            'exec': 'Run a command in a running container',
             'top': 'Display the running processes of a container',
             'inspect': 'Return low-level information on a container or image',
             'images': 'List images',
@@ -62,6 +64,7 @@ class SwarmArgumentParser(object):
             self._add_parser_restart()
             self._add_parser_rm()
             self._add_parser_run()
+            self._add_parser_exec()
             self._add_parser_images()
             self._add_parser_inspect()
             self._add_parser_top()
@@ -199,11 +202,34 @@ Username or UID')
 Bind mount a volume')
         parser_run.add_argument('--volumes-from', action='append', help='\
 Mount volumes from the specified container(s)')
-        parser_run.add_argument('IMAGE', type=str, help='required')
-        parser_run.add_argument('COMMAND', nargs='?', help='optional')
-        parser_run.add_argument('ARG', nargs=argparse.REMAINDER, help='optional')
+        parser_run.add_argument('IMAGE', type=str, help='\
+Image name to run')
+        parser_run.add_argument('COMMAND', nargs='?', help='\
+The command to be run in the container')
+        parser_run.add_argument('ARG', nargs=argparse.REMAINDER, help='\
+Command arguments')
         parser_run.set_defaults(func=CreateContainer())
         parser_run.set_defaults(cmd='run')
+
+    def _add_parser_exec(self):
+        parser_exec = self._subparsers.add_parser('exec', description=self._help['exec'],\
+help=self._help['exec'], usage=self._usage['exec'])
+        parser_exec.add_argument('-d', '--detach', action='store_true', help='\
+Detached mode: run command in the background')
+        parser_exec.add_argument('-i', '--interactive', action='store_true', help='\
+Keep STDIN open even if not attached')
+        parser_exec.add_argument('-t', '--tty', action='store_true', help='\
+Allocate a pseudo-TTY')
+        parser_exec.add_argument('-u', '--user', type=str, help='\
+Username or UID (format: <name|uid>[:<group|gid>])')
+        parser_exec.add_argument('CONTAINER', type=str, help='\
+Container ID')
+        parser_exec.add_argument('COMMAND', type=str, help='\
+Command to be executed')
+        parser_exec.add_argument('ARG', nargs=argparse.REMAINDER, help='\
+Command arguments')
+        parser_exec.set_defaults(func=Exec())
+        parser_exec.set_defaults(cmd='exec')
 
     def _add_parser_top(self):
         parser_top = self._subparsers.add_parser('top', description=self._help['top'],\

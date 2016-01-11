@@ -25,3 +25,12 @@ def start(client, container, interactive=True, stdout=None, stderr=None, stdin=N
     """
 
     PseudoTerminal(client, container, interactive=interactive, stdout=stdout, stderr=stderr, stdin=stdin, logs=logs).start()
+
+def exec_start(client, container, command, user='', interactive=True, stdout=None, stderr=None, stdin=None, logs=None):
+    """
+    Present the PTY of the exec instance inside the current process.
+
+    This is just a wrapper for PseudoTerminal(client, container).exec_start()
+    """
+
+    PseudoTerminal(client, container, interactive=interactive, stdout=stdout, stderr=stderr, stdin=stdin, logs=logs).exec_start(command, user)

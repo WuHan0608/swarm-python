@@ -19,6 +19,7 @@ class SwarmCommand(object):
             'stop': self._swarm_stop,
             'restart': self._swarm_restart,
             'rm': self._swarm_rm,
+            'exec': self._swarm_exec,
             'top': self._swarm_top,
             'inspect': self._swarm_inspect,
             'images': self._swarm_images,
@@ -218,6 +219,15 @@ class SwarmCommand(object):
         self._args.func(tuple(self._args.CONTAINER), self._args.volumes,\
                                         self._args.force, self._args.link)
 
+    def _swarm_exec(self):
+        command = []
+        if self._args.COMMAND is not None:
+            command.append(self._args.COMMAND)
+        if self._args.ARG is not None:
+            command.extend(self._args.ARG)
+        self._args.func(self._args.CONTAINER, command, self._args.detach,\
+                                self._args.interactive, self._args.tty, self._args.user)
+
     def _swarm_top(self):
         self._args.func(self._args.CONTAINER, self._args.ps_args)
 
@@ -277,7 +287,7 @@ class SwarmCommand(object):
             repo, tag = repo_name
         if self._args.auth is not None:
             if self._args.auth.count(':') == 1:
-                user, passwd = self._args.auth.split(':')
+                username, password = self._args.auth.split(':')
             else:
                 print('bad format for auth (expected username:password)')
                 exit(1)

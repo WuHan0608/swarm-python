@@ -121,6 +121,7 @@ class PseudoTerminal(object):
 
         self.client = client
         self.container = container
+        self.exec_id = None
         self.raw = None
         self.interactive = interactive
         self.stdout = stdout or sys.stdout
@@ -161,6 +162,40 @@ class PseudoTerminal(object):
                 for (pump, flag) in zip(pumps, flags):
                     io.set_blocking(pump, flag)
 
+
+    def exec_start(self, command, user):
+        """
+        Present the PTY of the exec instance inside the current process.
+
+        This will take over the current process' TTY until the exec instance's PTY
+        is closed.
+        """
+
+        self.exec_create_instance(command, user)
+        pty_stdin, pty_stdout, pty_stderr = self.exec_instance_sockets()
+        pumps = []
+
+        if pty_stdin and self.interactive:
+            pumps.append(io.Pump(io.Stream(self.stdin), pty_stdin, wait_for_output=False))
+
+        if pty_stdout:
+            pumps.append(io.Pump(pty_stdout, io.Stream(self.stdout), propagate_close=False))
+
+        if pty_stderr:
+            pumps.append(io.Pump(pty_stderr, io.Stream(self.stderr), propagate_close=False))
+
+        #if not self.container_info()['State']['Running']:
+        #    self.client.start(self.container, **kwargs)
+
+        flags = [p.set_blocking(False) for p in pumps]
+
+        try:
+            with WINCHHandler(self):
+                self._hijack_exec_instance_tty(pumps)
+        finally:
+            if flags:
+                for (pump, flag) in zip(pumps, flags):
+                    io.set_blocking(pump, flag)
 
     def israw(self):
         """
@@ -233,9 +268,113 @@ class PseudoTerminal(object):
         return self.client.inspect_container(self.container)
 
 
+    def exec_instance_israw(self):
+        """
+        Returns True if the PTY should operate in raw mode.
+
+        If the exec instance was not started with tty=True, this will return False.
+        """
+
+        if self.raw is None:
+            info = self.exec_instance_info()
+            self.raw = self.stdout.isatty() and info['ProcessConfig']['tty']
+
+        return self.raw
+
+
+    def exec_instance_sockets(self):
+        """
+        Returns a tuple of sockets connected to the pty (stdin,stdout,stderr).
+
+        If any of the sockets are not attached in the container, `None` is
+        returned in the tuple.
+        """
+
+        info = self.exec_instance_info()
+
+        def attach_socket(key):
+            if info['Open{0}'.format(key.capitalize())]:
+                socket = self.client.exec_start(
+                    self.exec_id,
+                    stream=True,
+                    tty=True,
+                    socket=True
+                )
+
+                stream = io.Stream(socket)
+
+                if info['ProcessConfig']['tty']:
+                    return stream
+                else:
+                    return io.Demuxer(stream)
+            else:
+                return None
+
+        return map(attach_socket, ('stdin', 'stdout', 'stderr'))
+
+
+
+    def exec_resize(self, size=None):
+        """
+        Resize the tty session used by the specified exec command.
+
+        If `size` is not None, it must be a tuple of (height,width), otherwise
+        it will be determined by the size of the current TTY.
+        """
+
+        if not self.exec_instance_israw():
+            return
+
+        size = size or tty.size(self.stdout)
+
+        if size is not None:
+            rows, cols = size
+            try:
+                self.client.exec_resize(self.exec_id, height=rows, width=cols)
+            except IOError: # Exec instance already exited
+                pass
+
+
+    def exec_instance_info(self):
+        """
+        Thin wrapper around client.exec_inspect().
+        """
+
+        return self.client.exec_inspect(self.exec_id)
+
+
+    def exec_create_instance(self, command, user):
+        ret = self.client.exec_create(self.container, command, stdin=True,\
+                                                stdout=True, stderr=True,\
+                                                tty=True, user=user)
+        self.exec_id = ret['Id']
+
+
     def _hijack_tty(self, pumps):
         with tty.Terminal(self.stdin, raw=self.israw()):
             self.resize()
+            while True:
+                read_pumps = [p for p in pumps if not p.eof]
+                write_streams = [p.to_stream for p in pumps if p.to_stream.needs_write()]
+
+                read_ready, write_ready = io.select(read_pumps, write_streams, timeout=60)
+                try:
+                    for write_stream in write_ready:
+                        write_stream.do_write()
+
+                    for pump in read_ready:
+                        pump.flush()
+
+                    if all([p.is_done() for p in pumps]):
+                        break
+
+                except SSLError as e:
+                    if 'The operation did not complete' not in e.strerror:
+                        raise e
+
+    def _hijack_exec_instance_tty(self, pumps):
+        with tty.Terminal(self.stdin, raw=self.exec_instance_israw()):
+            self.exec_resize()
             while True:
                 read_pumps = [p for p in pumps if not p.eof]
                 write_streams = [p.to_stream for p in pumps if p.to_stream.needs_write()]

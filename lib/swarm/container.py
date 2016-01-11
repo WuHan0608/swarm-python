@@ -267,11 +267,8 @@ class RemoveContainer(ContainersBase):
         if self.cli is not None:
             containers_removed = self._handle_containers('remove', container_list,\
                                                         v=v, force=force, link=link)
-            if containers_removed is not None:
-                self._get_containers(show_all=True,\
-                                     container_list=containers_removed)
-                if not self.containers and containers_removed:
-                    print('Succeed to remove container {containers}'.format(\
+            if containers_removed:
+                print('Succeed to remove container {containers}'.format(\
                                             containers=', '.join(containers_removed)))
             self.cli.close()
 
@@ -290,7 +287,7 @@ class CreateContainer(ContainersBase):
         # check if container id is matched
         # otherwise search containers since=self.container['Id']
         latest_container = self.cli.containers(latest=True)[0]
-        if self.container_id == latest_container['Id']:
+        if self.container['Id'] == latest_container['Id']:
             self._get_containers(latest=True)
         else:
             self._get_containers(since=self.container['Id'],\
@@ -306,10 +303,10 @@ class CreateContainer(ContainersBase):
                     print('[Warning] {message}'.format(message=self.container['Warnings']))
                 # try to start created container
                 if self.container.get('Id') is not None:
-                    self.cli.start(self.container['Id'])
                     if kwargs['stdin_open'] and kwargs['tty']:
-                        dockerpty.start(self.cli, self.container)
+                        dockerpty.start(self.cli, self.container['Id'])
                     else:
+                        self.cli.start(self.container['Id'])
                         self._print_created_container()
                     if rm_flag:
                         self.cli.remove_container(self.container['Id'])
@@ -385,7 +382,6 @@ class Top(ContainersBase):
         :param ps_args(str): An optional arguments passed to ps (e.g., aux)
         """
         if self.cli is not None:
-            processes = []
             try:
                 self.ret = self.cli.top(container, ps_args)
             except errors.NotFound as e:
@@ -394,6 +390,35 @@ class Top(ContainersBase):
                 print(e.explanation)
             except errors.DockerException as e:
                 print(e.explanation)
+            finally:
+                self.cli.close()
             self._pretty_print()
-            self.cli.close()
 
+class Exec(ContainersBase):
+    def __init__(self):
+        super(Exec, self).__init__()
+
+    def _exec_create(self, container, command, user):
+        ret = self.cli.exec_create(container, command, user=user)
+        return ret['Id']
+
+    def _exec_start(self, exec_id, detach):
+        for line in self.cli.exec_start(exec_id, detach=detach, stream=True):
+            print(line.strip())
+
+    def __call__(self, container, command, detach, stdin, tty, user):
+        if self.cli is not None:
+            try:
+                exec_id = self._exec_create(container, command, user)
+                if stdin and tty:
+                    dockerpty.exec_start(self.cli, container, command, user)
+                else:
+                    self._exec_start(exec_id, detach)
+            except errors.NotFound as e:
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
+            except errors.DockerException as e:
+                print(e.explanation)
+            finally:
+                self.cli.close()
