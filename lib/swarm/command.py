@@ -174,6 +174,7 @@ class SwarmCommand(object):
             'detach': self._args.detach,
             'stdin_open': self._args.interactive,
             'tty': self._args.tty,
+            'rm': self._args.rm,
             'ports': ports,
             'environment': self._args.environment,
             'dns': None,
@@ -194,7 +195,7 @@ class SwarmCommand(object):
         }
         self._args.func(image, command=kwargs['command'], hostname=kwargs['hostname'],\
                         user=kwargs['user'],detach=kwargs['detach'],stdin_open=kwargs['stdin_open'],\
-                        tty=kwargs['tty'], mem_limit=None,ports=kwargs['ports'],\
+                        tty=kwargs['tty'],rm=kwargs['rm'],mem_limit=None,ports=kwargs['ports'],\
                         environment=kwargs['environment'],dns=kwargs['dns'],volumes=kwargs['volumes'],\
                         volumes_from=None,network_disabled=kwargs['network_disabled'],\
                         name=kwargs['name'],entrypoint=kwargs['entrypoint'],\

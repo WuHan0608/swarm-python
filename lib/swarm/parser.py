@@ -158,10 +158,13 @@ Container ID')
     def _add_parser_run(self):
         parser_run = self._subparsers.add_parser('run', description=self._help['run'],\
 help=self._help['run'], usage=self._usage['run'])
+        group = parser_run.add_mutually_exclusive_group()
+        group.add_argument('-d', '--detach', action='store_true', help='\
+Run container in background')
+        group.add_argument('--rm', action='store_true', help='\
+Automatically remove the container when it exits')
         parser_run.add_argument('--cpuset-cpus', type=str, help='\
 CPUs in which to allow execution (0-3, 0,1)')
-        parser_run.add_argument('-d', '--detach', action='store_true', help='\
-Run container in background' )
         parser_run.add_argument('-e', '--environment', action='append', help='\
 Set environment variables')
         parser_run.add_argument('--entrypoint', type=str, help='\
@@ -188,8 +191,6 @@ Publish a container\'s port(s) to the host')
 Give extended privileges to this container')
         parser_run.add_argument('--restart', choices=('on-failure', 'always'), help='\
 Restart policy to apply when a container exits')
-        #parser_run.add_argument('--rm', action='store_true', help='\
-#Automatically remove the container when it exits')
         parser_run.add_argument('-t', '--tty', action='store_true', help='\
 Allocate a pseudo-TTY')
         parser_run.add_argument('-u', '--user', type=str, help='\

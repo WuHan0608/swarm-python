@@ -1,5 +1,6 @@
 # -*- coding: utf8 -*-
 
+import dockerpty
 from docker import errors
 from datetime import datetime
 from base import SwarmClient
@@ -13,8 +14,11 @@ class ContainersBase(object):
         self.cli = SwarmClient().client
         self.containers = {}
         self.node_length = len('NODE')
+        self.image_length = len('IMAGE')
+        self.command_length = len('COMMAND')
         self.created_length = len('CREATED')
         self.status_length = len('STATUS')
+        self.max_command_length = 20
 
     def _handle_containers(self, command, container_list, **kwargs):
         """
@@ -105,45 +109,67 @@ class ContainersBase(object):
                     created = timeformat(created_delta.seconds + created_delta.days * 86400)
                 # get the longest node/created/status field length for pretty print
                 self.node_length = len(node) if len(node) > self.node_length else self.node_length
-                self.created_length = len(created) if len(created) > self.created_length else self.created_length
+                self.image_length = len(container['Image']) if len(container['Image']) > self.image_length\
+                                                                    else self.image_length
+                if len(container['Command']) < self.command_length:
+                    command = container['Command']
+                else:
+                    command = container['Command'] if len(container['Command']) < self.max_command_length\
+                                                                else container['Command'][:self.max_command_length]
+                    self.command_length = len(container['Command']) if len(container['Command']) < self.max_command_length\
+                                                                else self.max_command_length
+                self.created_length = len(created) if len(created) > self.created_length\
+                                                                    else self.created_length
                 self.status_length = len(container['Status']) if len(container['Status']) > self.status_length\
-                                                                                        else self.status_length
-                 # (Id, Node, Created, Status, Names)
-                data = (container['Id'], node, created, container['Status'], name)
+                                                                    else self.status_length
+                 # (Id, Node, Image, Command, Created, Status, Names)
+                data = (container['Id'], node, container['Image'], command, created, container['Status'], name)
                 self.containers.setdefault(node, []).append(data)
 
     def _pretty_print(self):
         if self.containers:
             blank = 4
-            # title: CONTAINER ID    NODE    CREATED    STATUS    NAMES
+            # title: CONTAINER ID    IMAGE    COMMAND    NODE    CREATED    STATUS    NAMES
             s1 = ' ' * blank
             s2 = ' ' * (self.node_length+blank-len('NODE'))
-            s3 = ' ' * (self.created_length+blank-len('CREATED'))
-            s4 = ' ' * (self.status_length+blank-len('STATUS'))
-            title = 'CONTAINER ID{s1}NODE{s2}CREATED{s3}STATUS{s4}NAMES'.format(\
-                                                                            s1=s1,\
-                                                                            s2=s2,\
-                                                                            s3=s3,\
-                                                                            s4=s4)
+            s3 = ' ' * (self.image_length+blank-len('IMAGE'))
+            s4 = ' ' * (self.command_length+blank-len('COMMAND')+2)
+            s5 = ' ' * (self.created_length+blank-len('CREATED'))
+            s6 = ' ' * (self.status_length+blank-len('STATUS'))
+            title = '\
+CONTAINER ID{s1}NODE{s2}IMAGE{s3}COMMAND{s4}CREATED{s5}STATUS{s6}NAMES'.format(\
+                                                                        s1=s1,\
+                                                                        s2=s2,\
+                                                                        s3=s3,\
+                                                                        s4=s4,\
+                                                                        s5=s5,\
+                                                                        s6=s6)
             # pretty-print string defined by title
             string = ''
             for node in sorted(self.containers):
                 for data in self.containers[node]:
-                    cid, node, created, status, names = data
+                    cid, node, image, command, created, status, names = data
                     s1 = ' ' * blank
                     s2 = ' ' * (self.node_length+blank-len(node))
-                    s3 = ' ' * (self.created_length+blank-len(created))
-                    s4 = ' ' * (self.status_length+blank-len(status))
-                    string += '{id}{s1}{node}{s2}{created}{s3}{status}{s4}{names}\n'.format(\
-                                                                                id=cid[:12],\
-                                                                                s1=s1,\
-                                                                                node=node,\
-                                                                                s2=s2,\
-                                                                                created=created,\
-                                                                                s3=s3,\
-                                                                                status=status,\
-                                                                                s4=s4,\
-                                                                                names=names)
+                    s3 = ' ' * (self.image_length+blank-len(image))
+                    s4 = ' ' * (self.command_length+blank-len(command))
+                    s5 = ' ' * (self.created_length+blank-len(created))
+                    s6 = ' ' * (self.status_length+blank-len(status))
+                    string += '\
+{id}{s1}{node}{s2}{image}{s3}"{command}"{s4}{created}{s5}{status}{s6}{names}\n'.format(\
+                                                                            id=cid[:12],\
+                                                                            s1=s1,\
+                                                                            node=node,\
+                                                                            s2=s2,\
+                                                                            image=image,\
+                                                                            s3=s3,\
+                                                                            command=command,\
+                                                                            s4=s4,\
+                                                                            created=created,\
+                                                                            s5=s5,\
+                                                                            status=status,\
+                                                                            s6=s6,\
+                                                                            names=names)
             # print pretty-print string
             print('{title}\n{string}'.format(title=title,string=string.rstrip()))
 
@@ -257,31 +283,36 @@ class CreateContainer(ContainersBase):
         super(CreateContainer, self).__init__()
 
     def _create_container(self, *args, **kwargs):
-        ret = self.cli.create_container(*args, **kwargs)
-        self.container_id, self.warning = ret.get('Id'), ret.get('Warnings')
+        self.container = self.cli.create_container(*args, **kwargs)
 
     def _print_created_container(self):
         # try to get the latest container
         # check if container id is matched
-        # otherwise search containers since=self.container_id
+        # otherwise search containers since=self.container['Id']
         latest_container = self.cli.containers(latest=True)[0]
         if self.container_id == latest_container['Id']:
             self._get_containers(latest=True)
         else:
-            self._get_containers(since=self.container_id,\
-                                 container_list=(self.container_id,))
+            self._get_containers(since=self.container['Id'],\
+                                 container_list=(self.container['Id']))
         self._pretty_print()
 
     def __call__(self, *args, **kwargs):
         if self.cli is not None:
+            rm_flag = kwargs.pop('rm')
             try:
                 self._create_container(*args, **kwargs)
-                if self.warning is not None:
-                    print('[Warning] {message}'.format(message=self.warning))
+                if self.container.get('Warnings') is not None:
+                    print('[Warning] {message}'.format(message=self.container['Warnings']))
                 # try to start created container
-                if self.container_id is not None:
-                    self.cli.start(self.container_id)
-                    self._print_created_container()
+                if self.container.get('Id') is not None:
+                    self.cli.start(self.container['Id'])
+                    if kwargs['stdin_open'] and kwargs['tty']:
+                        dockerpty.start(self.cli, self.container)
+                    else:
+                        self._print_created_container()
+                    if rm_flag:
+                        self.cli.remove_container(self.container['Id'])
             except errors.NotFound as e:
                 print(e.explanation)
             except errors.APIError as e:
