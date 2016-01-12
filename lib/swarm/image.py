@@ -4,7 +4,7 @@ import json
 import sys
 from docker import errors
 from datetime import datetime
-from base import SwarmClient
+from client import SwarmClient
 from utils import timeformat, byteformat
 
 class Images(object):
@@ -22,7 +22,7 @@ class Images(object):
         """
         :param name(str): Only show images belonging to the repository name
         :param show_all(bool):  Show all images (by default filter out the intermediate image layers)
-        :parma filters(dict): Filters to be processed on the image list
+        :parma filters(dict): Filters to be applied on the image list
         :param image_list(list): List of image id or name
         """
         try:
@@ -97,9 +97,9 @@ class Images(object):
             # print pretty-print string
             print('{title}\n{string}'.format(title=title,string=string.rstrip()))
 
-    def __call__(self, name=None, show_all=False, filters={}):
+    def __call__(self, **kwargs):
         if self.cli is not None:
-            self._get_images(name=name,show_all=show_all,filters=filters)
+            self._get_images(**kwargs)
             self._pretty_print()
 
 class RemoveImage(Images):
@@ -110,6 +110,9 @@ class RemoveImage(Images):
         super(RemoveImage, self).__init__()
 
     def __call__(self, image_list):
+        """
+        :param image_list(list): List of image id or name
+        """
         if self.cli is not None:
             images_err = set()
             for image in image_list:
@@ -127,11 +130,9 @@ class RemoveImage(Images):
             # exclude images in image_error
             images_removed = tuple((image for image in image_list\
                                             if not image in images_err))
-            self._get_images(images_removed)
-
-            if not self.images and images_removed:
+            if images_removed:
                 print('Succeed to remove image {images}'.format(\
-                                            images=', '.join(images_removed)))
+                                        images=', '.join(images_removed)))
             self.cli.close()
 
 class Tag(Images):
@@ -141,7 +142,7 @@ class Tag(Images):
     def __init__(self):
         super(Tag, self).__init__()
 
-    def __call__(self, image, repo, tag, force):
+    def __call__(self, *args, **kwargs):
         """
         :param image(str): The image to tag
         :param repo(str): The repository to set for the tag
@@ -149,22 +150,27 @@ class Tag(Images):
         :param force(bool): Force
         """
         if self.cli is not None:
+            ret = None
             try:
-                ret = self.cli.tag(image, repo, tag, force)
+                ret = self.cli.tag(*args, **kwargs)
             except errors.NotFound as e:
                 print(e.explanation)
             except errors.APIError as e:
                 print(e.explanation)
-            except errors.DockeException as e:
+            except errors.DockerException as e:
                 print(e.explanation)
             finally:
                 self.cli.close()
-            status = 'Succeed' if ret else 'Fail'
-            print('{status} to tag {image} into {repo}:{tag}'.format(\
-                                                            status=status,\
-                                                            image=image,\
-                                                            repo=repo,\
-                                                            tag=tag))
+            if ret is not None:
+                status = 'Succeed' if ret else 'Fail'
+                image, repo = args
+                tag = kwargs['tag'] if kwargs.get('tag') is not None\
+                                                            else 'latest'
+                print('{status} to tag {image} into {repo}:{tag}'.format(\
+                                                                status=status,\
+                                                                image=image,\
+                                                                repo=repo,\
+                                                                tag=tag))
 
 class InspectImage(Images):
     """
@@ -175,7 +181,7 @@ class InspectImage(Images):
 
     def __call__(self, image_list):
         """
-        :param image_list(list): List of image id or names
+        :param image_list(list): List of image id or name
         """
         if self.cli is not None:
             ret = []
@@ -198,7 +204,7 @@ class Pull(Images):
     def __init__(self):
         super(Pull, self).__init__()
 
-    def __call__(self, repo, tag, insecure_registry, auth_config):
+    def __call__(self, *args, **kwargs):
         """
         :param repo(str): The repository to pull
         :param tag(str): The tag to pull
@@ -207,12 +213,45 @@ class Pull(Images):
         """
         if self.cli is not None:
             try:
-                for line in self.cli.pull(repo, tag=tag, stream=True,\
-                                        insecure_registry=insecure_registry,\
-                                        auth_config=auth_config):
-                    ret = json.loads(line)
-                    print('[{id}] {status}'.format(id=ret['id'],\
-                                                  status=ret['status']))
+                kwargs['stream'] = True
+                for line in self.cli.pull(*args, **kwargs):
+                    line = json.loads(line)
+                    if line.get('id') is not None:
+                        print('[{id}] {status}'.format(id=line['id'],\
+                                                        status=line['status']))
+                    elif line.get('error') is not None:
+                        print(line['error'])
+            except errors.NotFound as e:
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
+            except errors.DockerException as e:
+                print(e.explanation)
+            finally:
+                self.cli.close()
+
+class Push(Images):
+    """
+    Similar to `docker push`
+    """
+    def __init__(self):
+        super(Push, self).__init__()
+
+    def __call__(self, *args, **kwargs):
+        """
+        :param repo(str): The repository to push to
+        :param tag(str): An optional tag to push
+        :param insecure_registry(bool): Use http:// to connect to the registry
+        """
+        if self.cli is not None:
+            kwargs['stream'] = True
+            try:
+                for line in self.cli.push(*args, **kwargs):
+                    line = json.loads(line)
+                    if line.get('status') is not None:
+                        print(line['status'])
+                    elif line.get('error') is not None:
+                        print(line['error'])
             except errors.NotFound as e:
                 print(e.explanation)
             except errors.APIError as e:
@@ -233,7 +272,10 @@ class Build(Images):
         if self.cli is not None:
             try:
                 for line in self.cli.build(**kwargs):
-                    print(line['stream'].encode('utf8')),
+                    if line.get('stream') is not None:
+                        print(line['stream']),
+                    elif line.get('error') is not None:
+                        print(line['error'])
                     sys.stdout.flush()
             except errors.NotFound as e:
                 print(e.explanation)
@@ -241,5 +283,7 @@ class Build(Images):
                 print(e.explanation)
             except errors.DockerException as e:
                 print(e.explanation)
+            except TypeError as e:
+                print(e)
             finally:
                 self.cli.close()

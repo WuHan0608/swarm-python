@@ -216,7 +216,7 @@ class Client(
                 if reader._fp.chunk_left:
                     data += reader.read(reader._fp.chunk_left)
                 if decode:
-                    if six.PY3 or six.PY2:
+                    if six.PY3:
                         data = data.decode('utf-8')
                     for stream in data.split('\n'):
                         if stream:

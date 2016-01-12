@@ -3,7 +3,7 @@
 import dockerpty
 from docker import errors
 from datetime import datetime
-from base import SwarmClient
+from client import SwarmClient
 from utils import timeformat
 
 class ContainersBase(object):
@@ -180,9 +180,9 @@ class Containers(ContainersBase):
     def __init__(self):
         super(Containers, self).__init__()
 
-    def __call__(self, show_all=False, filters={},limit=None):
+    def __call__(self, **kwargs):
         if self.cli is not None:
-            self._get_containers(show_all=show_all,filters=filters,limit=limit)
+            self._get_containers(**kwargs)
             self._pretty_print()
             self.cli.close()
 
@@ -257,7 +257,7 @@ class RemoveContainer(ContainersBase):
     def __init__(self):
         super(RemoveContainer, self).__init__()
 
-    def __call__(self, container_list, v, force, link):
+    def __call__(self, container_list, **kwargs):
         """
         :param container_list(list): List of container ids
         :param v(bool): Remove the volumes associated with the container
@@ -265,8 +265,7 @@ class RemoveContainer(ContainersBase):
         :param: link(bool): Remove the specified link and not the underlying container
         """
         if self.cli is not None:
-            containers_removed = self._handle_containers('remove', container_list,\
-                                                        v=v, force=force, link=link)
+            containers_removed = self._handle_containers('remove', container_list, **kwargs)
             if containers_removed:
                 print('Succeed to remove container {containers}'.format(\
                                             containers=', '.join(containers_removed)))
@@ -410,12 +409,20 @@ class Exec(ContainersBase):
             print(line.strip())
 
     def __call__(self, container, command, detach, stdin, tty, user):
+        """
+        :param container(str): Target container where exec instance will be created
+        :param command(str or list): Command to be executed
+        :param detach(bool): If true, detach from the exec command
+        :param stdin(bool): Keep stdin open even if not attached
+        :param tty(bool): Allocate a pseudo-TTY
+        :param user(str): User to execute command as
+        """
         if self.cli is not None:
             try:
                 exec_id = self._exec_create(container, command, user)
                 if stdin and tty:
                     #dockerpty.exec_start(self.cli, container, command, user)
-                    print('Not implement with -it')
+                    print('Not implement with `swarm exec -it`')
                 else:
                     self._exec_start(exec_id, detach)
             except errors.NotFound as e:

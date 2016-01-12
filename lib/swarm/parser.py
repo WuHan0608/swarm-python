@@ -2,10 +2,10 @@
 
 import argparse
 from api import SwarmApi
-from misc import Version, Info
+from daemon import Version, Info
 from container import Containers, StartContainer, StopContainer, RestartContainer,\
                       RemoveContainer, CreateContainer, InspectContainer, Top, Exec
-from image import Images, RemoveImage, Tag, InspectImage, Pull, Build
+from image import Images, RemoveImage, Tag, InspectImage, Pull, Push, Build
 from utils import base_url_found
 
 class SwarmArgumentParser(object):
@@ -33,6 +33,7 @@ class SwarmArgumentParser(object):
             'rmi': 'swarm rmi [OPTIONS] IMAGE [IMAGE...]',
             'tag': 'swarm tag [OPTIONS] IMAGE[:TAG] [REGISTRYHOST/][USERNAME/]NAME[:TAG]',
             'pull': 'swarm pull [OPTIONS] NAME[:TAG]',
+            'push': 'swarm push [OPTIONS] NAME[:TAG]',
             'build': 'swarm build [OPTIONS] PATH | URL | -',
         }
         self._help = {
@@ -52,6 +53,7 @@ class SwarmArgumentParser(object):
             'rmi': 'Remove one or more images',
             'tag': 'Tag an image into a repository',
             'pull': 'Pull an image or a repository from a registry',
+            'push': 'Push an image or a repository to a registry',
             'build': 'Build a new image from the source code at PATH',
         }
 
@@ -73,6 +75,7 @@ class SwarmArgumentParser(object):
             self._add_parser_rmi()
             self._add_parser_tag()
             self._add_parser_pull()
+            self._add_parser_push()
             self._add_parser_build()
         return self._parser.parse_args()
 
@@ -89,19 +92,19 @@ get [ name1 name2 ... | all | current ]\n\
 unset [ name1 name2 ... | all | current ]\n\
 use name1\n\
 version [ x.xx | auto ]')
-        parser_api.set_defaults(func=SwarmApi())
+        parser_api.set_defaults(func=SwarmApi)
         parser_api.set_defaults(cmd='api')
 
     def _add_parser_version(self):
         parser_version = self._subparsers.add_parser('version', description=self._help['version'],\
 help=self._help['version'], usage=self._usage['version'])
-        parser_version.set_defaults(func=Version())
+        parser_version.set_defaults(func=Version)
         parser_version.set_defaults(cmd='version')
 
     def _add_parser_info(self):
         parser_info = self._subparsers.add_parser('info', description=self._help['info'],\
 help=self._help['info'], usage=self._usage['info'])
-        parser_info.set_defaults(func=Info())
+        parser_info.set_defaults(func=Info)
         parser_info.set_defaults(cmd='info')
 
     def _add_parser_ps(self):
@@ -115,7 +118,7 @@ Filter output based on the conditions provide', metavar='name=value')
 Show containers of the specific nodes\n\
 e.g. -l web.example.com -l mail.example.com\n\
      -l db[01:08].example.com -l db10.example.com')
-        parser_ps.set_defaults(func=Containers())
+        parser_ps.set_defaults(func=Containers)
         parser_ps.set_defaults(cmd='ps')
 
     def _add_parser_start(self):
@@ -123,7 +126,7 @@ e.g. -l web.example.com -l mail.example.com\n\
 help=self._help['start'], usage=self._usage['start'])
         parser_start.add_argument('CONTAINER', nargs='+', help='\
 Container ID')
-        parser_start.set_defaults(func=StartContainer())
+        parser_start.set_defaults(func=StartContainer)
         parser_start.set_defaults(cmd='start')
 
     def _add_parser_stop(self):
@@ -133,7 +136,7 @@ help=self._help['stop'], usage=self._usage['stop'])
 Seconds to wait for stop before killing it (Default 10 seconds)')
         parser_stop.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
-        parser_stop.set_defaults(func=StopContainer())
+        parser_stop.set_defaults(func=StopContainer)
         parser_stop.set_defaults(cmd='stop')
 
     def _add_parser_restart(self):
@@ -143,7 +146,7 @@ help=self._help['restart'], usage=self._usage['restart'])
 Seconds to wait for stop before killing it (Default 10 seconds)')
         parser_restart.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
-        parser_restart.set_defaults(func=RestartContainer())
+        parser_restart.set_defaults(func=RestartContainer)
         parser_restart.set_defaults(cmd='restart')
 
     def _add_parser_rm(self):
@@ -158,7 +161,7 @@ Remove the specified link')
 Remove the volumes associated with the container')
         parser_rm.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
-        parser_rm.set_defaults(func=RemoveContainer())
+        parser_rm.set_defaults(func=RemoveContainer)
         parser_rm.set_defaults(cmd='rm')
 
     def _add_parser_run(self):
@@ -211,7 +214,7 @@ Image name to run')
 The command to be run in the container')
         parser_run.add_argument('ARG', nargs=argparse.REMAINDER, help='\
 Command arguments')
-        parser_run.set_defaults(func=CreateContainer())
+        parser_run.set_defaults(func=CreateContainer)
         parser_run.set_defaults(cmd='run')
 
     def _add_parser_exec(self):
@@ -231,7 +234,7 @@ Container ID')
 Command to be executed')
         parser_exec.add_argument('ARG', nargs=argparse.REMAINDER, help='\
 Command arguments')
-        parser_exec.set_defaults(func=Exec())
+        parser_exec.set_defaults(func=Exec)
         parser_exec.set_defaults(cmd='exec')
 
     def _add_parser_top(self):
@@ -241,7 +244,7 @@ help=self._help['top'], usage=self._usage['top'])
 Container ID')
         parser_top.add_argument('ps_args', nargs='?', metavar='ps OPTIONS', help='\
 e.g., aux')
-        parser_top.set_defaults(func=Top())
+        parser_top.set_defaults(func=Top)
         parser_top.set_defaults(cmd='top')
 
     def _add_parser_inspect(self):
@@ -251,8 +254,8 @@ help=self._help['inspect'], usage=self._usage['inspect'])
 Return JSON for specified type, (e.g image or container)')
         parser_inspect.add_argument('OBJECT', nargs='+', metavar='CONTAINER|IMAGE', help='\
 id or name of container|image')
-        parser_inspect.set_defaults(inspect_container=InspectContainer())
-        parser_inspect.set_defaults(inspect_image=InspectImage())
+        parser_inspect.set_defaults(inspect_container=InspectContainer)
+        parser_inspect.set_defaults(inspect_image=InspectImage)
         parser_inspect.set_defaults(cmd='inspect')
 
     def _add_parser_images(self):
@@ -265,7 +268,7 @@ Show all images (default hides intermediate images)')
         parser_images.add_argument('-f','--filter',type=str, help='\
 Filter output based on conditions provided\n\
 Use \'[-f|--filter] node=<nodename>\' to show images of the specific node')
-        parser_images.set_defaults(func=Images())
+        parser_images.set_defaults(func=Images)
         parser_images.set_defaults(cmd='images')
 
     def _add_parser_rmi(self):
@@ -273,7 +276,7 @@ Use \'[-f|--filter] node=<nodename>\' to show images of the specific node')
 help=self._help['rmi'], usage=self._usage['rmi'])
         parser_rmi.add_argument('IMAGE', nargs='+', help='\
 IMAGE[:TAG]')
-        parser_rmi.set_defaults(func=RemoveImage())
+        parser_rmi.set_defaults(func=RemoveImage)
         parser_rmi.set_defaults(cmd='rmi')
 
     def _add_parser_tag(self):
@@ -285,7 +288,7 @@ Force')
 IMAGE[:TAG]')
         parser_tag.add_argument('REPOTAG', type=str, help='\
 [REGISTRYHOST/][USERNAME/]NAME[:TAG]')
-        parser_tag.set_defaults(func=Tag())
+        parser_tag.set_defaults(func=Tag)
         parser_tag.set_defaults(cmd='tag')
 
     def _add_parser_pull(self):
@@ -297,12 +300,23 @@ Use an insecure registry')
 Override credentials for client login')
         parser_pull.add_argument('REPOTAG', type=str, metavar='NAME[:TAG]', help='\
 Image name with optional tag')
-        parser_pull.set_defaults(func=Pull())
+        parser_pull.set_defaults(func=Pull)
         parser_pull.set_defaults(cmd='pull')
+
+    def _add_parser_push(self):
+        parser_push = self._subparsers.add_parser('push', description=self._help['push'],\
+help=self._help['push'], usage=self._usage['push'])
+        parser_push.add_argument('--insecure', action='store_true', help='\
+Use http:// to connect to the registry')
+        parser_push.add_argument('REPOTAG', type=str, metavar='NAME[:TAG]')
+        parser_push.set_defaults(func=Push)
+        parser_push.set_defaults(cmd='push')
 
     def _add_parser_build(self):
         parser_build = self._subparsers.add_parser('build', description=self._help['build'],\
 help=self._help['build'], usage=self._usage['build'])
+        parser_build.add_argument('--build-arg', type=str, action='append', help='\
+Set build-time variables')
         parser_build.add_argument('-c', '--cpu-shares', type=int, help='\
 CPU shares (relative weight)')
         parser_build.add_argument('--cpuset-cpus', type=str, help='\
@@ -326,5 +340,5 @@ Remove intermediate containers after a successful build')
         parser_build.add_argument('-t', '--tag', type=str, default='latest', help='\
 Repository name (and optionally a tag) for the image')
         parser_build.add_argument('PATH', type=str, metavar='PATH | URL | -')
-        parser_build.set_defaults(func=Build())
+        parser_build.set_defaults(func=Build)
         parser_build.set_defaults(cmd='build')
