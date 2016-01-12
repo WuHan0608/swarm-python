@@ -216,10 +216,14 @@ class Client(
                 if reader._fp.chunk_left:
                     data += reader.read(reader._fp.chunk_left)
                 if decode:
-                    if six.PY3:
+                    if six.PY3 or six.PY2:
                         data = data.decode('utf-8')
-                    data = json.loads(data)
-                yield data
+                    for stream in data.split('\n'):
+                        if stream:
+                            stream = json.loads(stream)
+                            yield stream
+                else:
+                    yield data
         else:
             # Response isn't chunked, meaning we probably
             # encountered an error immediately
