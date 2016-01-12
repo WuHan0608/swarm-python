@@ -5,7 +5,7 @@ from api import SwarmApi
 from misc import Version, Info
 from container import Containers, StartContainer, StopContainer, RestartContainer,\
                       RemoveContainer, CreateContainer, InspectContainer, Top, Exec
-from image import Images, RemoveImage, Tag, InspectImage, Pull
+from image import Images, RemoveImage, Tag, InspectImage, Pull, Build
 from utils import base_url_found
 
 class SwarmArgumentParser(object):
@@ -18,21 +18,22 @@ class SwarmArgumentParser(object):
         self._subparsers = self._parser.add_subparsers(title='Commands')
         self._usage = {
             'api': 'swarm api COMMAND ARG [ARG...]',
-            'version': 'docker version [OPTIONS]',
-            'info': 'docker info [OPTIONS]',
-            'ps': 'docker ps [OPTIONS]',
-            'start': 'docker start [OPTIONS] CONTAINER [CONTAINER...]',
-            'stop': 'docker stop [OPTIONS] CONTAINER [CONTAINER...]',
-            'restart': 'docker restart [OPTIONS] CONTAINER [CONTAINER...]',
-            'rm': 'docker rm [OPTIONS] CONTAINER [CONTAINER...]',
-            'run': 'docker run [OPTIONS] IMAGE [COMMAND] [ARG...]',
-            'exec': 'docker exec [OPTIONS] CONTAINER COMMAND [ARG...]',
-            'top': 'docker top [OPTIONS] CONTAINER [ps OPTIONS]',
-            'inspect': 'docker inspect [OPTIONS] CONTAINER|IMAGE [CONTAINER|IMAGE...]',
-            'images': 'docker images [OPTIONS] [REPOSITORY]',
-            'rmi': 'docker rmi [OPTIONS] IMAGE [IMAGE...]',
-            'tag': 'docker tag [OPTIONS] IMAGE[:TAG] [REGISTRYHOST/][USERNAME/]NAME[:TAG]',
-            'pull': 'docker pull [OPTIONS] NAME[:TAG]',
+            'version': 'swarm version [OPTIONS]',
+            'info': 'swarm info [OPTIONS]',
+            'ps': 'swarm ps [OPTIONS]',
+            'start': 'swarm start [OPTIONS] CONTAINER [CONTAINER...]',
+            'stop': 'swarm stop [OPTIONS] CONTAINER [CONTAINER...]',
+            'restart': 'swarm restart [OPTIONS] CONTAINER [CONTAINER...]',
+            'rm': 'swarm rm [OPTIONS] CONTAINER [CONTAINER...]',
+            'run': 'swarm run [OPTIONS] IMAGE [COMMAND] [ARG...]',
+            'exec': 'swarm exec [OPTIONS] CONTAINER COMMAND [ARG...]',
+            'top': 'swarm top [OPTIONS] CONTAINER [ps OPTIONS]',
+            'inspect': 'swarm inspect [OPTIONS] CONTAINER|IMAGE [CONTAINER|IMAGE...]',
+            'images': 'swarm images [OPTIONS] [REPOSITORY]',
+            'rmi': 'swarm rmi [OPTIONS] IMAGE [IMAGE...]',
+            'tag': 'swarm tag [OPTIONS] IMAGE[:TAG] [REGISTRYHOST/][USERNAME/]NAME[:TAG]',
+            'pull': 'swarm pull [OPTIONS] NAME[:TAG]',
+            'build': 'swarm build [OPTIONS] PATH | URL | -',
         }
         self._help = {
             'api': 'Config Swarm API, otherwise no further command is available',
@@ -51,6 +52,7 @@ class SwarmArgumentParser(object):
             'rmi': 'Remove one or more images',
             'tag': 'Tag an image into a repository',
             'pull': 'Pull an image or a repository from a registry',
+            'build': 'Build a new image from the source code at PATH',
         }
 
     def parse_args(self):
@@ -71,6 +73,7 @@ class SwarmArgumentParser(object):
             self._add_parser_rmi()
             self._add_parser_tag()
             self._add_parser_pull()
+            self._add_parser_build()
         return self._parser.parse_args()
 
     def _add_parser_api(self):
@@ -288,12 +291,40 @@ IMAGE[:TAG]')
     def _add_parser_pull(self):
         parser_pull = self._subparsers.add_parser('pull', description=self._help['pull'],\
 help=self._help['pull'], usage=self._usage['pull'])
-        parser_pull.add_argument('REPOTAG', type=str, metavar='NAME[:TAG]', help='\
-Image name with optional tag')
         parser_pull.add_argument('--insecure', action='store_true', help='\
 Use an insecure registry')
         parser_pull.add_argument('--auth', type=str, metavar='username:password', help='\
 Override credentials for client login')
+        parser_pull.add_argument('REPOTAG', type=str, metavar='NAME[:TAG]', help='\
+Image name with optional tag')
         parser_pull.set_defaults(func=Pull())
         parser_pull.set_defaults(cmd='pull')
-        
+
+    def _add_parser_build(self):
+        parser_build = self._subparsers.add_parser('build', description=self._help['build'],\
+help=self._help['build'], usage=self._usage['build'])
+        parser_build.add_argument('-c', '--cpu-shares', type=int, help='\
+CPU shares (relative weight)')
+        parser_build.add_argument('--cpuset-cpus', type=str, help='\
+CPUs in which to allow execution (0-3, 0,1)')
+        parser_build.add_argument('-f', '--file', type=str, help='\
+Name of the Dockerfile (Default is \'PATH/Dockerfile\')')
+        parser_build.add_argument('--force-rm', action='store_true', help='\
+Always remove intermediate containers')
+        parser_build.add_argument('-m', '--memory', type=int, help='\
+Memory limit')
+        parser_build.add_argument('--memory-swap', type=int, help='\
+Total memory (memory + swap), \'-1\' to disable swap')
+        parser_build.add_argument('--no-cache', action='store_true', help='\
+Do not use cache when building the image')
+        parser_build.add_argument('--pull', action='store_true', help='\
+Always attempt to pull a newer version of the image')
+        parser_build.add_argument('-q', '--quiet', action='store_true', help='\
+Suppress the verbose output generated by the containers')
+        parser_build.add_argument('--rm', choices=(True, False), default=True, help='\
+Remove intermediate containers after a successful build')
+        parser_build.add_argument('-t', '--tag', type=str, default='latest', help='\
+Repository name (and optionally a tag) for the image')
+        parser_build.add_argument('PATH', type=str, metavar='PATH | URL | -')
+        parser_build.set_defaults(func=Build())
+        parser_build.set_defaults(cmd='build')

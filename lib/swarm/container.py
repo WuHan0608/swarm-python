@@ -395,6 +395,9 @@ class Top(ContainersBase):
             self._pretty_print()
 
 class Exec(ContainersBase):
+    """
+    Similar to `docker exec`
+    """
     def __init__(self):
         super(Exec, self).__init__()
 
@@ -411,7 +414,8 @@ class Exec(ContainersBase):
             try:
                 exec_id = self._exec_create(container, command, user)
                 if stdin and tty:
-                    dockerpty.exec_start(self.cli, container, command, user)
+                    #dockerpty.exec_start(self.cli, container, command, user)
+                    print('Not implement with -it')
                 else:
                     self._exec_start(exec_id, detach)
             except errors.NotFound as e:

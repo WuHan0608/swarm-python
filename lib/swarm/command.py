@@ -26,6 +26,7 @@ class SwarmCommand(object):
             'rmi': self._swarm_rmi,
             'tag': self._swarm_tag,
             'pull': self._swarm_pull,
+            'build': self._swarm_build,
         }
 
     def __call__(self):
@@ -296,3 +297,19 @@ class SwarmCommand(object):
                 'password': password
             }
         self._args.func(repo, tag, self._args.insecure, auth_config)
+
+    def _swarm_build(self):
+        container_limits = {}
+        if self._args.cpu_shares is not None:
+            container_limits['cpushares'] = self._args.cpu_shares
+        if self._args.cpuset_cpus is not None:
+            container_limits['cpusetcpus'] = self._args.cpuset_cpus
+        if self._args.memory is not None:
+            container_limits['memory'] = self._args.memory
+        if self._args.memory_swap is not None:
+            container_limits['memswap'] = self._args.self._args.memory_swap
+        self._args.func(path=self._args.PATH, tag=self._args.tag, quiet=self._args.quiet,\
+                        nocache=self._args.no_cache, rm=self._args.rm, pull=self._args.pull,\
+                        forcerm=self._args.force_rm, dockerfile=self._args.file,\
+                        container_limits=container_limits, decode=True)
+

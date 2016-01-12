@@ -1,6 +1,7 @@
 # -*- coding: utf8 -*-
 
 import json
+import sys
 from docker import errors
 from datetime import datetime
 from base import SwarmClient
@@ -212,6 +213,28 @@ class Pull(Images):
                     ret = json.loads(line)
                     print('[{id}] {status}'.format(id=ret['id'],\
                                                   status=ret['status']))
+            except errors.NotFound as e:
+                print(e.explanation)
+            except errors.APIError as e:
+                print(e.explanation)
+            except errors.DockerException as e:
+                print(e.explanation)
+            finally:
+                self.cli.close()
+
+class Build(Images):
+    """
+    Similar to `docker build`
+    """
+    def __init__(self):
+        super(Build, self).__init__()
+
+    def __call__(self, **kwargs):
+        if self.cli is not None:
+            try:
+                for line in self.cli.build(**kwargs):
+                    print(line['stream'].encode('utf8')),
+                    sys.stdout.flush()
             except errors.NotFound as e:
                 print(e.explanation)
             except errors.APIError as e:
