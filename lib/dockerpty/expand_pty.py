@@ -81,7 +81,7 @@ class WINCHHandler(object):
             signal.signal(signal.SIGWINCH, self.original_handler)
 
 
-class PseudoTerminal(object):
+class ExpandPseudoTerminal(object):
     """
     Wraps the pseudo-TTY (PTY) allocated to a docker container.
 
@@ -110,7 +110,7 @@ class PseudoTerminal(object):
     """
 
 
-    def __init__(self, client, container, interactive=True, stdout=None, stderr=None, stdin=None, logs=None):
+    def __init__(self, client, exec_id, interactive=True, stdout=None, stderr=None, stdin=None, logs=None):
         """
         Initialize the PTY using the docker.Client instance and container dict.
         """
@@ -120,7 +120,7 @@ class PseudoTerminal(object):
             logs = 1
 
         self.client = client
-        self.container = container
+        self.exec_id = exec_id
         self.raw = None
         self.interactive = interactive
         self.stdout = stdout or sys.stdout
@@ -128,13 +128,16 @@ class PseudoTerminal(object):
         self.stdin = stdin or sys.stdin
         self.logs = logs
 
-    def start(self, **kwargs):
+
+    def start(self):
         """
         Present the PTY of the container inside the current process.
 
         This will take over the current process' TTY until the container's PTY
         is closed.
         """
+
+        print self.exec_id
 
         pty_stdin, pty_stdout, pty_stderr = self.sockets()
         pumps = []
@@ -148,10 +151,10 @@ class PseudoTerminal(object):
         if pty_stderr:
             pumps.append(io.Pump(pty_stderr, io.Stream(self.stderr), propagate_close=False))
 
-        if not self.container_info()['State']['Running']:
-            self.client.start(self.container, **kwargs)
 
         flags = [p.set_blocking(False) for p in pumps]
+
+        self.client.exec_start(self.exec_id, tty=True)
 
         try:
             with WINCHHandler(self):
@@ -171,7 +174,7 @@ class PseudoTerminal(object):
 
         if self.raw is None:
             info = self.container_info()
-            self.raw = self.stdout.isatty() and info['Config']['Tty']
+            self.raw = self.stdout.isatty() and info['ProcessConfig']['tty']
 
         return self.raw
 
@@ -187,14 +190,15 @@ class PseudoTerminal(object):
         info = self.container_info()
 
         def attach_socket(key):
-            if info['Config']['Attach{0}'.format(key.capitalize())]:
+            if info['Open{0}'.format(key.capitalize())]:
                 socket = self.client.attach_socket(
-                    self.container,
+                    info['Container']['ID'],
                     {key: 1, 'stream': 1, 'logs': self.logs},
                 )
                 stream = io.Stream(socket)
 
-                if info['Config']['Tty']:
+                if info['Container']['Config']['Tty']:
+                    print info['Container']['Config']
                     return stream
                 else:
                     return io.Demuxer(stream)
@@ -220,23 +224,23 @@ class PseudoTerminal(object):
         if size is not None:
             rows, cols = size
             try:
-                self.client.resize(self.container, height=rows, width=cols)
+                self.client.exec_resize(self.exec_id, height=rows, width=cols)
             except IOError: # Container already exited
                 pass
 
 
     def container_info(self):
         """
-        Thin wrapper around client.inspect_container().
+        Thin wrapper around client.exec_inspect().
         """
 
-        return self.client.inspect_container(self.container)
+        return self.client.exec_inspect(self.exec_id)
 
 
     def _hijack_tty(self, pumps):
         with tty.Terminal(self.stdin, raw=self.israw()):
             self.resize()
-            
+
             while True:
                 read_pumps = [p for p in pumps if not p.eof]
                 write_streams = [p.to_stream for p in pumps if p.to_stream.needs_write()]

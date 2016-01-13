@@ -15,6 +15,7 @@
 # limitations under the License.
 
 from dockerpty.pty import PseudoTerminal
+from dockerpty.expand_pty import ExpandPseudoTerminal
 
 
 def start(client, container, interactive=True, stdout=None, stderr=None, stdin=None, logs=None):
@@ -26,11 +27,11 @@ def start(client, container, interactive=True, stdout=None, stderr=None, stdin=N
 
     PseudoTerminal(client, container, interactive=interactive, stdout=stdout, stderr=stderr, stdin=stdin, logs=logs).start()
 
-def exec_start(client, container, command, user='', interactive=True, stdout=None, stderr=None, stdin=None, logs=None):
+def exec_start(client, exec_id, interactive=True, stdout=None, stderr=None, stdin=None):
     """
-    Present the PTY of the exec instance inside the current process.
+    Present the PTY of the exec command inside the current process.
 
-    This is just a wrapper for PseudoTerminal(client, container).exec_start()
+    This is just a wrapper for ExpandPseudoTerminal(client, container).start(cmd)
     """
 
-    PseudoTerminal(client, container, interactive=interactive, stdout=stdout, stderr=stderr, stdin=stdin, logs=logs).exec_start(command, user)
+    ExpandPseudoTerminal(client, exec_id, interactive=interactive, stdout=stdout, stderr=stderr, stdin=stdin).start()

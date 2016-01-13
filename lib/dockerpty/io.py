@@ -58,6 +58,7 @@ def select(read_streams, write_streams, timeout=0):
             exception_streams,
             timeout,
         )[0:2]
+        print exception_streams
     except builtin_select.error as e:
         # POSIX signals interrupt select()
         no = e.errno if six.PY3 else e[0]
