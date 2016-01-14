@@ -20,6 +20,8 @@ Swarm CLI Developed by Python
 
 * docker-py is packaged into swarm-python, but extra packages that docker-py deponds on may need to be installed additionally
 
+        $ pip install docker-py
+
 * `swarm api` is a new command for swarm api settings including swarm api version, swarm api url; this must be the first step to enable further commands
 
         $ swarm api set api1=tcp://192.168.1.1:3375 api2=tcp://192.168.1.2:3375 api3=tcp://192.168.1.3:3375
