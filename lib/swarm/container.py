@@ -400,12 +400,14 @@ class Exec(ContainerBase):
         cli = self.swarm.client
         if cli is not None:
             try:
-                exec_id = cli.exec_create(container, command, user)
                 if stdin and tty:
-                    #dockerpty.exec_start(self.cli, container, command, user)
+                    ret = cli.exec_create(container, command, stdin=True, stdout=True,\
+                                                        stderr=True, tty=True, user=user)
+                    #dockerpty.exec_start(cli, ret['Id'])
                     print('Not implement with `swarm exec -it`')
                 else:
-                    for line in cli.exec_start(exec_id, detach=detach, stream=True):
+                    ret = cli.exec_create(container, command, user=user)
+                    for line in cli.exec_start(ret['Id'], detach=detach, stream=True):
                         print(line.strip())                     
             except errors.NotFound as e:
                 print(e.explanation)

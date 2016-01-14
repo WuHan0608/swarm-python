@@ -110,14 +110,10 @@ class ExpandPseudoTerminal(object):
     """
 
 
-    def __init__(self, client, exec_id, interactive=True, stdout=None, stderr=None, stdin=None, logs=None):
+    def __init__(self, client, exec_id, interactive=True, stdout=None, stderr=None, stdin=None):
         """
         Initialize the PTY using the docker.Client instance and container dict.
         """
-
-        if logs is None:
-            warnings.warn("The default behaviour of dockerpty is changing. Please add logs=1 to your dockerpty.start call to maintain existing behaviour. See https://github.com/d11wtq/dockerpty/issues/51 for details.", DeprecationWarning)
-            logs = 1
 
         self.client = client
         self.exec_id = exec_id
@@ -126,7 +122,6 @@ class ExpandPseudoTerminal(object):
         self.stdout = stdout or sys.stdout
         self.stderr = stderr or sys.stderr
         self.stdin = stdin or sys.stdin
-        self.logs = logs
 
 
     def start(self):
@@ -138,7 +133,6 @@ class ExpandPseudoTerminal(object):
         """
 
         print self.exec_id
-
         pty_stdin, pty_stdout, pty_stderr = self.sockets()
         pumps = []
 
@@ -153,8 +147,6 @@ class ExpandPseudoTerminal(object):
 
 
         flags = [p.set_blocking(False) for p in pumps]
-
-        self.client.exec_start(self.exec_id, tty=True)
 
         try:
             with WINCHHandler(self):
@@ -191,14 +183,14 @@ class ExpandPseudoTerminal(object):
 
         def attach_socket(key):
             if info['Open{0}'.format(key.capitalize())]:
-                socket = self.client.attach_socket(
-                    info['Container']['ID'],
-                    {key: 1, 'stream': 1, 'logs': self.logs},
+                socket = self.client.exec_start(
+                    self.exec_id,\
+                    tty=True,\
+                    socket=True
                 )
                 stream = io.Stream(socket)
 
-                if info['Container']['Config']['Tty']:
-                    print info['Container']['Config']
+                if info['ProcessConfig']['tty']:
                     return stream
                 else:
                     return io.Demuxer(stream)
