@@ -1,9 +1,11 @@
 # -*- coding: utf8 -*-
 
+import requests
 from docker import Client
 from api import SwarmApi
 from utils import current_url_found, detect_range, expand_hostname_range
 from pprint import pprint
+from getpass import getpass
 
 class SwarmCommand(object):
     def __init__(self, args):
@@ -13,6 +15,7 @@ class SwarmCommand(object):
             'api': self._swarm_api,
             'version': self._swarm_version,
             'info': self._swarm_info,
+            'login': self._swarm_login,
             'ps': self._swarm_ps,
             'run': self._swarm_run,
             'start': self._swarm_start,
@@ -33,8 +36,14 @@ class SwarmCommand(object):
     def __call__(self):
         try:
             self._commands[self._args.cmd]()
-        except KeyError as e:
-            print('No implement `swarm {command}`'.format(command=e.message))
+        except KeyError:
+            print('No implement `swarm {command}`'.format(command=self._args.cmd))
+        except requests.exceptions.ConnectionError:
+            print('Connection Error: Swarm API is NOT accessible.')
+        except requests.exceptions.Timeout:
+            print('Connection Timeout to Swarm API.')
+        except KeyboardInterrupt:
+            print('Terminated.')
 
     def _swarm_api(self):
         notice = '[Notice] No swarm api in use'
@@ -42,28 +51,40 @@ class SwarmCommand(object):
             if not current_url_found(self._config):
                 print(notice)
             for name in self._args.argument:
-                self._args.func().get_api(name)
+                self._args.func.get_api(name)
         elif self._args.command == 'set':
             if not current_url_found(self._config):
                 print(notice)
             for item in self._args.argument:
-                name, api = item.split('=')
-                self._args.func().update_api(name, api)
+                if item.count('=') == 1:
+                    name, api = item.split('=')
+                    self._args.func.update_api(name, api)
+                else:
+                    print('bad format for api (expected name=value)')
         elif self._args.command == 'unset':
             if not current_url_found(self._config):
                 print(notice)
             for name in self._args.argument:
-                self._args.func().remove_api(name)
+                self._args.func.remove_api(name)
         elif self._args.command == 'version':
-            self._args.func().use_version(self._args.argument[0])
+            self._args.func.use_version(self._args.argument[0])
         elif self._args.command == 'use':
-            self._args.func().use_api(self._args.argument[0])
+            self._args.func.use_api(self._args.argument[0])
 
     def _swarm_version(self):
-        self._args.func()()
+        self._args.func()
 
     def _swarm_info(self):
-        self._args.func()()
+        self._args.func()
+
+    def _swarm_login(self):
+        username = raw_input('Username: ').strip() if self._args.username is None\
+                                                        else self._args.username
+        password = getpass('Password: ').strip() if self._args.password is None\
+                                                        else self._args.password
+        email = raw_input('Email: ').strip() if self._args.email is None\
+                                                        else self._args.email
+        self._args.func(username, password=password, email=email, registry=self._args.SERVER)
 
     def _swarm_ps(self):
         filters = {}
@@ -85,7 +106,7 @@ class SwarmCommand(object):
             limit = tuple(limit)
         else:
             limit = None
-        self._args.func()(show_all=self._args.all,filters=filters,limit=limit)
+        self._args.func(show_all=self._args.all,filters=filters,limit=limit)
 
     def _swarm_run(self):
         labels = None
@@ -199,7 +220,7 @@ class SwarmCommand(object):
             'volume_driver': None,
             'stop_signal': None,
         }
-        self._args.func()(image, command=kwargs['command'], hostname=kwargs['hostname'],\
+        self._args.func(image, command=kwargs['command'], hostname=kwargs['hostname'],\
                         user=kwargs['user'],detach=kwargs['detach'],stdin_open=kwargs['stdin_open'],\
                         tty=kwargs['tty'],rm=kwargs['rm'],mem_limit=None,ports=kwargs['ports'],\
                         environment=kwargs['environment'],dns=kwargs['dns'],volumes=kwargs['volumes'],\
@@ -212,16 +233,16 @@ class SwarmCommand(object):
                         volume_driver=kwargs['volume_driver'],stop_signal=kwargs['stop_signal'])
 
     def _swarm_start(self):
-        self._args.func()(tuple(self._args.CONTAINER))
+        self._args.func(tuple(self._args.CONTAINER))
 
     def _swarm_stop(self):
-        self._args.func()(tuple(self._args.CONTAINER), self._args.time)
+        self._args.func(tuple(self._args.CONTAINER), self._args.time)
 
     def _swarm_restart(self):
-        self._args.func()(tuple(self._args.CONTAINER), self._args.time)
+        self._args.func(tuple(self._args.CONTAINER), self._args.time)
 
     def _swarm_rm(self):
-        self._args.func()(tuple(self._args.CONTAINER), v=self._args.volumes,\
+        self._args.func(tuple(self._args.CONTAINER), v=self._args.volumes,\
                                         force=self._args.force, link=self._args.link)
 
     def _swarm_exec(self):
@@ -230,11 +251,11 @@ class SwarmCommand(object):
             command.append(self._args.COMMAND)
         if self._args.ARG is not None:
             command.extend(self._args.ARG)
-        self._args.func()(self._args.CONTAINER, command, self._args.detach,\
+        self._args.func(self._args.CONTAINER, command, self._args.detach,\
                                 self._args.interactive, self._args.tty, self._args.user)
 
     def _swarm_top(self):
-        self._args.func()(self._args.CONTAINER, self._args.ps_args)
+        self._args.func(self._args.CONTAINER, self._args.ps_args)
 
     def _swarm_inspect(self):
         # print container or image inspect if type is provide
@@ -264,13 +285,13 @@ class SwarmCommand(object):
                 else:
                     print('bad format for filter (expected name=value)')
                     exit(1)
-        self._args.func()(name=self._args.REPOSITORY,show_all=self._args.all,filters=filters)
+        self._args.func(name=self._args.REPOSITORY,show_all=self._args.all,filters=filters)
 
     def _swarm_rmi(self):
         images = set()
         for image_name in self._args.IMAGE:
             images.add(image_name)
-        self._args.func()(tuple(images))
+        self._args.func(tuple(images))
 
     def _swarm_tag(self):
         repo_name = self._args.REPOTAG.split(':', 1)
@@ -280,7 +301,7 @@ class SwarmCommand(object):
             tag = None
         else:
             repo, tag = repo_name
-        self._args.func()(self._args.IMAGE, repo, tag=tag, force=self._args.force)
+        self._args.func(self._args.IMAGE, repo, tag=tag, force=self._args.force)
 
     def _swarm_pull(self):
         auth_config = None
@@ -300,7 +321,7 @@ class SwarmCommand(object):
                 'username': username,
                 'password': password
             }
-        self._args.func()(repo, tag=tag, insecure_registry=self._args.insecure,\
+        self._args.func(repo, tag=tag, insecure_registry=self._args.insecure,\
                                                         auth_config=auth_config)
 
     def _swarm_push(self):
@@ -310,7 +331,7 @@ class SwarmCommand(object):
             tag = None
         else:
             repo, tag = repo_name
-        self._args.func()(repo, tag=tag, insecure_registry=self._args.insecure)
+        self._args.func(repo, tag=tag, insecure_registry=self._args.insecure)
 
     def _swarm_build(self):
         container_limits = {}
@@ -342,7 +363,7 @@ class SwarmCommand(object):
                 else:
                     print('bad format for buildargs (expected name=value)')
                     exit(1)
-        self._args.func()(path=self._args.PATH, tag=self._args.tag, quiet=self._args.quiet,\
+        self._args.func(path=self._args.PATH, tag=self._args.tag, quiet=self._args.quiet,\
                         nocache=self._args.no_cache, rm=self._args.rm, pull=self._args.pull,\
                         forcerm=self._args.force_rm, dockerfile=self._args.file,\
                         container_limits=container_limits, decode=True, buildargs=buildargs)

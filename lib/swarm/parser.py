@@ -2,7 +2,7 @@
 
 import argparse
 from api import SwarmApi
-from daemon import Version, Info
+from daemon import Version, Info, Login
 from container import Containers, StartContainer, StopContainer, RestartContainer,\
                       RemoveContainer, CreateContainer, InspectContainer, Top, Exec
 from image import Images, RemoveImage, Tag, InspectImage, Pull, Push, Build
@@ -20,6 +20,7 @@ class SwarmArgumentParser(object):
             'api': 'swarm api COMMAND ARG [ARG...]',
             'version': 'swarm version [OPTIONS]',
             'info': 'swarm info [OPTIONS]',
+            'login': 'docker login [OPTIONS] [SERVER]',
             'ps': 'swarm ps [OPTIONS]',
             'start': 'swarm start [OPTIONS] CONTAINER [CONTAINER...]',
             'stop': 'swarm stop [OPTIONS] CONTAINER [CONTAINER...]',
@@ -40,6 +41,8 @@ class SwarmArgumentParser(object):
             'api': 'Config Swarm API, otherwise no further command is available',
             'version': 'Show the Docker version information.',
             'info': 'Display system-wide information',
+            'login': 'Register or log in to a Docker registry server, if no server is\
+specified "https://index.docker.io/v1/" is the default.',
             'ps': 'List containers',
             'start': 'Start one or more stopped containers',
             'stop': 'Stop a running container by sending SIGTERM and then SIGKILL after a grace period',
@@ -62,6 +65,7 @@ class SwarmArgumentParser(object):
         if base_url_found(self._config):
             self._add_parser_version()
             self._add_parser_info()
+            self._add_parser_login()
             self._add_parser_ps()
             self._add_parser_start()
             self._add_parser_stop()
@@ -92,20 +96,34 @@ get [ name1 name2 ... | all | current ]\n\
 unset [ name1 name2 ... | all | current ]\n\
 use name1\n\
 version [ x.xx | auto ]')
-        parser_api.set_defaults(func=SwarmApi)
+        parser_api.set_defaults(func=SwarmApi())
         parser_api.set_defaults(cmd='api')
 
     def _add_parser_version(self):
         parser_version = self._subparsers.add_parser('version', description=self._help['version'],\
 help=self._help['version'], usage=self._usage['version'])
-        parser_version.set_defaults(func=Version)
+        parser_version.set_defaults(func=Version())
         parser_version.set_defaults(cmd='version')
 
     def _add_parser_info(self):
         parser_info = self._subparsers.add_parser('info', description=self._help['info'],\
 help=self._help['info'], usage=self._usage['info'])
-        parser_info.set_defaults(func=Info)
+        parser_info.set_defaults(func=Info())
         parser_info.set_defaults(cmd='info')
+
+    def _add_parser_login(self):
+        parser_login = self._subparsers.add_parser('login', description=self._help['login'],\
+help=self._help['login'], usage=self._usage['login'])
+        parser_login.add_argument('-e', '--email', type=str, help='\
+Email')
+        parser_login.add_argument('-p', '--password', type=str, help='\
+Password')
+        parser_login.add_argument('-u', '--username', type=str, help='\
+Username')
+        parser_login.add_argument('SERVER', type=str, nargs='?', help='\
+URL to the registry. Ex:https://index.docker.io/v1/')
+        parser_login.set_defaults(func=Login())
+        parser_login.set_defaults(cmd='login')
 
     def _add_parser_ps(self):
         parser_ps = self._subparsers.add_parser('ps', description=self._help['ps'],\
@@ -118,7 +136,7 @@ Filter output based on the conditions provide', metavar='name=value')
 Show containers of the specific nodes\n\
 e.g. -l web.example.com -l mail.example.com\n\
      -l db[01:08].example.com -l db10.example.com')
-        parser_ps.set_defaults(func=Containers)
+        parser_ps.set_defaults(func=Containers())
         parser_ps.set_defaults(cmd='ps')
 
     def _add_parser_start(self):
@@ -126,7 +144,7 @@ e.g. -l web.example.com -l mail.example.com\n\
 help=self._help['start'], usage=self._usage['start'])
         parser_start.add_argument('CONTAINER', nargs='+', help='\
 Container ID')
-        parser_start.set_defaults(func=StartContainer)
+        parser_start.set_defaults(func=StartContainer())
         parser_start.set_defaults(cmd='start')
 
     def _add_parser_stop(self):
@@ -136,7 +154,7 @@ help=self._help['stop'], usage=self._usage['stop'])
 Seconds to wait for stop before killing it (Default 10 seconds)')
         parser_stop.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
-        parser_stop.set_defaults(func=StopContainer)
+        parser_stop.set_defaults(func=StopContainer())
         parser_stop.set_defaults(cmd='stop')
 
     def _add_parser_restart(self):
@@ -146,7 +164,7 @@ help=self._help['restart'], usage=self._usage['restart'])
 Seconds to wait for stop before killing it (Default 10 seconds)')
         parser_restart.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
-        parser_restart.set_defaults(func=RestartContainer)
+        parser_restart.set_defaults(func=RestartContainer())
         parser_restart.set_defaults(cmd='restart')
 
     def _add_parser_rm(self):
@@ -161,7 +179,7 @@ Remove the specified link')
 Remove the volumes associated with the container')
         parser_rm.add_argument('CONTAINER',nargs='+', help='\
 Container ID')
-        parser_rm.set_defaults(func=RemoveContainer)
+        parser_rm.set_defaults(func=RemoveContainer())
         parser_rm.set_defaults(cmd='rm')
 
     def _add_parser_run(self):
@@ -214,7 +232,7 @@ Image name to run')
 The command to be run in the container')
         parser_run.add_argument('ARG', nargs=argparse.REMAINDER, help='\
 Command arguments')
-        parser_run.set_defaults(func=CreateContainer)
+        parser_run.set_defaults(func=CreateContainer())
         parser_run.set_defaults(cmd='run')
 
     def _add_parser_exec(self):
@@ -234,7 +252,7 @@ Container ID')
 Command to be executed')
         parser_exec.add_argument('ARG', nargs=argparse.REMAINDER, help='\
 Command arguments')
-        parser_exec.set_defaults(func=Exec)
+        parser_exec.set_defaults(func=Exec())
         parser_exec.set_defaults(cmd='exec')
 
     def _add_parser_top(self):
@@ -244,7 +262,7 @@ help=self._help['top'], usage=self._usage['top'])
 Container ID')
         parser_top.add_argument('ps_args', nargs='?', metavar='ps OPTIONS', help='\
 e.g., aux')
-        parser_top.set_defaults(func=Top)
+        parser_top.set_defaults(func=Top())
         parser_top.set_defaults(cmd='top')
 
     def _add_parser_inspect(self):
@@ -254,8 +272,8 @@ help=self._help['inspect'], usage=self._usage['inspect'])
 Return JSON for specified type, (e.g image or container)')
         parser_inspect.add_argument('OBJECT', nargs='+', metavar='CONTAINER|IMAGE', help='\
 id or name of container|image')
-        parser_inspect.set_defaults(inspect_container=InspectContainer)
-        parser_inspect.set_defaults(inspect_image=InspectImage)
+        parser_inspect.set_defaults(inspect_container=InspectContainer())
+        parser_inspect.set_defaults(inspect_image=InspectImage())
         parser_inspect.set_defaults(cmd='inspect')
 
     def _add_parser_images(self):
@@ -268,7 +286,7 @@ Show all images (default hides intermediate images)')
         parser_images.add_argument('-f','--filter',type=str, help='\
 Filter output based on conditions provided\n\
 Use \'[-f|--filter] node=<nodename>\' to show images of the specific node')
-        parser_images.set_defaults(func=Images)
+        parser_images.set_defaults(func=Images())
         parser_images.set_defaults(cmd='images')
 
     def _add_parser_rmi(self):
@@ -276,7 +294,7 @@ Use \'[-f|--filter] node=<nodename>\' to show images of the specific node')
 help=self._help['rmi'], usage=self._usage['rmi'])
         parser_rmi.add_argument('IMAGE', nargs='+', help='\
 IMAGE[:TAG]')
-        parser_rmi.set_defaults(func=RemoveImage)
+        parser_rmi.set_defaults(func=RemoveImage())
         parser_rmi.set_defaults(cmd='rmi')
 
     def _add_parser_tag(self):
@@ -288,7 +306,7 @@ Force')
 IMAGE[:TAG]')
         parser_tag.add_argument('REPOTAG', type=str, help='\
 [REGISTRYHOST/][USERNAME/]NAME[:TAG]')
-        parser_tag.set_defaults(func=Tag)
+        parser_tag.set_defaults(func=Tag())
         parser_tag.set_defaults(cmd='tag')
 
     def _add_parser_pull(self):
@@ -300,7 +318,7 @@ Use an insecure registry')
 Override credentials for client login')
         parser_pull.add_argument('REPOTAG', type=str, metavar='NAME[:TAG]', help='\
 Image name with optional tag')
-        parser_pull.set_defaults(func=Pull)
+        parser_pull.set_defaults(func=Pull())
         parser_pull.set_defaults(cmd='pull')
 
     def _add_parser_push(self):
@@ -309,7 +327,7 @@ help=self._help['push'], usage=self._usage['push'])
         parser_push.add_argument('--insecure', action='store_true', help='\
 Use http:// to connect to the registry')
         parser_push.add_argument('REPOTAG', type=str, metavar='NAME[:TAG]')
-        parser_push.set_defaults(func=Push)
+        parser_push.set_defaults(func=Push())
         parser_push.set_defaults(cmd='push')
 
     def _add_parser_build(self):
@@ -340,5 +358,5 @@ Remove intermediate containers after a successful build')
         parser_build.add_argument('-t', '--tag', type=str, default='latest', help='\
 Repository name (and optionally a tag) for the image')
         parser_build.add_argument('PATH', type=str, metavar='PATH | URL | -')
-        parser_build.set_defaults(func=Build)
+        parser_build.set_defaults(func=Build())
         parser_build.set_defaults(cmd='build')

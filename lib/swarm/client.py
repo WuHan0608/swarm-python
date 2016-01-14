@@ -1,7 +1,6 @@
 # -*- coding: utf8 -*-
 
 import json
-from requests import exceptions
 from docker import Client
 from api import SwarmApi
 
@@ -46,14 +45,12 @@ class SwarmClient(object):
     def client(self):
         base_url = self._get_base_url()
         if base_url is not None:
-            cli = Client(base_url, version=self._get_version(), timeout=3)
+            cli = Client(base_url, version=self.version, timeout=3)
             # Hits the /_ping endpoint of the remote API and returns the result. 
             # An exception will be raised if the endpoint isn't responding.
-            try:
-                if cli.ping() == 'OK':
-                    return cli
-            except Exception as e:
-                raise
+            if cli.ping() == 'OK':
+                cli.close()
+                return Client(base_url, version=self.version, timeout=None)
             return
         print('No available swarm api')
         return
