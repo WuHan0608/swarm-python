@@ -14,9 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import os
 import sys
 import signal
-import warnings
+import socket
 from ssl import SSLError
 
 import dockerpty.io as io
@@ -122,6 +123,7 @@ class ExpandPseudoTerminal(object):
         self.stdout = stdout or sys.stdout
         self.stderr = stderr or sys.stderr
         self.stdin = stdin or sys.stdin
+        self.pty = None
 
 
     def start(self):
@@ -132,29 +134,13 @@ class ExpandPseudoTerminal(object):
         is closed.
         """
 
-        print self.exec_id
-        pty_stdin, pty_stdout, pty_stderr = self.sockets()
-        pumps = []
-
-        if pty_stdin and self.interactive:
-            pumps.append(io.Pump(io.Stream(self.stdin), pty_stdin, wait_for_output=False))
-
-        if pty_stdout:
-            pumps.append(io.Pump(pty_stdout, io.Stream(self.stdout), propagate_close=False))
-
-        if pty_stderr:
-            pumps.append(io.Pump(pty_stderr, io.Stream(self.stderr), propagate_close=False))
-
-
-        flags = [p.set_blocking(False) for p in pumps]
+        pty = self.sockets()
 
         try:
             with WINCHHandler(self):
-                self._hijack_tty(pumps)
+                self._hijack_tty(pty)
         finally:
-            if flags:
-                for (pump, flag) in zip(pumps, flags):
-                    io.set_blocking(pump, flag)
+            pass
 
 
     def israw(self):
@@ -183,21 +169,25 @@ class ExpandPseudoTerminal(object):
 
         def attach_socket(key):
             if info['Open{0}'.format(key.capitalize())]:
-                socket = self.client.exec_start(
-                    self.exec_id,\
-                    tty=True,\
-                    socket=True
-                )
-                stream = io.Stream(socket)
+                return True
+            return False
 
-                if info['ProcessConfig']['tty']:
-                    return stream
-                else:
-                    return io.Demuxer(stream)
+        if all(map(attach_socket, ('stdin', 'stdout', 'stderr'))):
+
+            socket = self.client.exec_start(\
+                self.exec_id,\
+                tty=True,\
+                socket=True\
+            )
+
+            stream = io.Stream(socket)
+
+            if info['ProcessConfig']['tty']:
+                return stream
             else:
-                return None
-
-        return map(attach_socket, ('stdin', 'stdout', 'stderr'))
+                return io.Demuxer(stream)
+        else:
+            return None
 
 
     def resize(self, size=None):
@@ -229,24 +219,34 @@ class ExpandPseudoTerminal(object):
         return self.client.exec_inspect(self.exec_id)
 
 
-    def _hijack_tty(self, pumps):
+    def _hijack_tty(self, pty):
         with tty.Terminal(self.stdin, raw=self.israw()):
             self.resize()
 
+            stdin, stdout = io.Stream(self.stdin), io.Stream(self.stdout)
+            rlist = [ stdin ]
+            wlist = [ stdout ]
+            rlist.append(pty)
+
             while True:
-                read_pumps = [p for p in pumps if not p.eof]
-                write_streams = [p.to_stream for p in pumps if p.to_stream.needs_write()]
+                read_ready, write_ready = io.select(rlist, wlist, timeout=None)
 
-                read_ready, write_ready = io.select(read_pumps, write_streams, timeout=60)
                 try:
-                    for write_stream in write_ready:
-                        write_stream.do_write()
-
-                    for pump in read_ready:
-                        pump.flush()
-
-                    if all([p.is_done() for p in pumps]):
-                        break
+                    if pty in read_ready:
+                        stdout.write(pty.read())
+                        rlist.remove(pty)
+                        wlist.append(pty)
+                    elif pty in write_ready:
+                        read = stdin.read()
+                        if read is None or len(read) == 0:
+                            pty.close()
+                            break
+                        try:
+                            pty.write(read)
+                        except socket.error:
+                            break
+                        wlist.remove(pty)
+                        rlist.append(pty)
 
                 except SSLError as e:
                     if 'The operation did not complete' not in e.strerror:

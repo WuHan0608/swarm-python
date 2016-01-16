@@ -192,6 +192,8 @@ class PseudoTerminal(object):
                     self.container,
                     {key: 1, 'stream': 1, 'logs': self.logs},
                 )
+
+                #print key, '->', socket.getsockname()
                 stream = io.Stream(socket)
 
                 if info['Config']['Tty']:

@@ -37,7 +37,7 @@ class SwarmCommand(object):
         try:
             self._commands[self._args.cmd]()
         except KeyError:
-            print('No implement `swarm {command}`'.format(command=self._args.cmd))
+           print('No implement `swarm {command}`'.format(command=self._args.cmd))
         except requests.exceptions.ConnectionError:
             print('Connection Error: Swarm API is NOT accessible.')
         except requests.exceptions.Timeout:
@@ -269,8 +269,8 @@ class SwarmCommand(object):
         else:
         # print both otherwise
             ret = []
-            for data in (self._args.inspect_container()(self._args.OBJECT),\
-                            self._args.inspect_image()(self._args.OBJECT)):
+            for data in (self._args.inspect_container(self._args.OBJECT),\
+                            self._args.inspect_image(self._args.OBJECT)):
                 if data is not None:
                     ret.extend(data)
             pprint(ret)

@@ -403,8 +403,8 @@ class Exec(ContainerBase):
                 if stdin and tty:
                     ret = cli.exec_create(container, command, stdin=True, stdout=True,\
                                                         stderr=True, tty=True, user=user)
-                    #dockerpty.exec_start(cli, ret['Id'])
-                    print('Not implement with `swarm exec -it`')
+                    dockerpty.exec_start(cli, ret['Id'])
+                    #print('Not implement with `swarm exec -it`')
                 else:
                     ret = cli.exec_create(container, command, user=user)
                     for line in cli.exec_start(ret['Id'], detach=detach, stream=True):
