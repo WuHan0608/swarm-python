@@ -261,9 +261,9 @@ class SwarmCommand(object):
         # print container or image inspect if type is provide
         if self._args.type is not None:
             if self._args.type == 'container':
-                ret = self._args.inspect_container()(self._args.OBJECT)
+                ret = self._args.inspect_container(self._args.OBJECT)
             elif self._args.type == 'image':
-                ret = self._args.inspect_image()(self._args.OBJECT)
+                ret = self._args.inspect_image(self._args.OBJECT)
             if ret is not None:
                 pprint(ret)
         else:
@@ -271,7 +271,7 @@ class SwarmCommand(object):
             ret = []
             for data in (self._args.inspect_container(self._args.OBJECT),\
                             self._args.inspect_image(self._args.OBJECT)):
-                if data is not None:
+                if isinstance(data, dict):
                     ret.extend(data)
             pprint(ret)
 
