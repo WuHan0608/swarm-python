@@ -271,9 +271,10 @@ class SwarmCommand(object):
             ret = []
             for data in (self._args.inspect_container(self._args.OBJECT),\
                             self._args.inspect_image(self._args.OBJECT)):
-                if isinstance(data, dict):
+                if data is not None:
                     ret.extend(data)
-            pprint(ret)
+            if ret:
+                pprint(ret)
 
     def _swarm_images(self):
         filters = {}
