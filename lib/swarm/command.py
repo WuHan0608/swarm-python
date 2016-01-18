@@ -1,7 +1,11 @@
 # -*- coding: utf8 -*-
 
+import os
 import requests
-from docker import Client
+import json
+import base64
+from docker import Client, errors
+from docker.auth import load_config
 from api import SwarmApi
 from utils import current_url_found, detect_range, expand_hostname_range
 from pprint import pprint
@@ -37,7 +41,11 @@ class SwarmCommand(object):
         try:
             self._commands[self._args.cmd]()
         except KeyError:
-           print('No implement `swarm {command}`'.format(command=self._args.cmd))
+            # KeyError is handled only if command is not implemented
+            # Otherwise throw excepiton
+            if self._args.cmd in self._commands:
+                raise
+            print('No implement `swarm {command}`'.format(command=self._args.cmd))
         except requests.exceptions.ConnectionError:
             print('Connection Error: Swarm API is NOT accessible.')
         except requests.exceptions.Timeout:
@@ -78,13 +86,82 @@ class SwarmCommand(object):
         self._args.func()
 
     def _swarm_login(self):
-        username = raw_input('Username: ').strip() if self._args.username is None\
-                                                        else self._args.username
-        password = getpass('Password: ').strip() if self._args.password is None\
-                                                        else self._args.password
-        email = raw_input('Email: ').strip() if self._args.email is None\
-                                                        else self._args.email
-        self._args.func(username, password=password, email=email, registry=self._args.SERVER)
+        config_file = os.path.join(os.environ['HOME'], '.docker', 'config.json')
+        registry = self._args.SERVER
+        try:
+            conf = load_config(config_file)
+        except errors.InvalidConfigFile as e:
+            print(e)
+            exit(1)
+        username_input, password_input, email_input = None, None, None
+        if self._args.username:
+            username_input = self._args.username
+            if conf.get(registry) is not None:
+                if username_input == conf[registry]['username']:
+                    password_input = conf[registry]['password']
+        else:
+            if conf.get(registry) is not None:
+                username = conf[registry]['username']
+                prompt = 'Username ({username}): '.format(username=username)
+                string = raw_input(prompt).strip()
+                if string in (username, ''):
+                    username_input = username
+                    password_input = conf[registry]['password']
+                else:
+                    username_input = string
+            else:
+                prompt = 'Username: '
+                username_input = raw_input(prompt).strip()
+        if self._args.password:
+            password_input = self._args.password
+        else:
+            if password_input is None:
+                if conf.get(registry) is not None:
+                    if conf[registry]['username'] == username_input:
+                        password_input = conf[registry]['password']
+                    else:
+                        prompt = 'Password: '
+                        password_input = getpass(prompt).strip()
+                else:
+                    prompt = 'Password: '
+                    password_input = getpass(prompt).strip()
+        if self._args.email:
+            email_input = self._args.email
+        else:
+            if conf.get(registry) is not None:
+                email_input = conf[registry]['email']
+            else:
+                prompt = 'Email: '
+                email_input = raw_input(prompt).strip()
+        ret = self._args.func(username_input, password=password_input, email=email_input, registry=registry)
+        if ret is not None:
+            if ret.get('Status') == 'Login Succeeded':
+                try:
+                    if os.path.exists(config_file):
+                        with open(config_file) as f:
+                            data = json.load(f)
+                    else:
+                        data = { 'auths': {} }
+                    auth = base64.b64encode('{user}:{passwd}'.format(user=username_input,\
+                                                                     passwd=password_input)).decode('ascii')
+                    data['auths'][registry] = {
+                        'auth': auth,
+                        'email': email_input
+                    }
+                    try:
+                        os.mkdir(os.path.join(os.environ['HOME'], '.docker'))
+                    except OSError as e:
+                        if e.errno != os.errno.EEXIST:
+                            raise
+                    with open(config_file, 'w') as f:
+                        f.write(json.dumps(data, indent=4))
+                except IOError as e:
+                    print (e)
+                    exit(1)                
+                print('WARNING: login credentials saved in {config_file}'.format(config_file=config_file))
+                print(ret['Status'])
+            elif ret.get('serveraddress') is not None:
+                print('Login Succeeded')
 
     def _swarm_ps(self):
         filters = {}

@@ -255,15 +255,19 @@ class Push(Images):
                 self.id_seen = line['id']
         else:
             string += '\n'
-        string += line['status']
-        if line.get('progress') is not None:
-            string += ' ' + line['progress'].encode('utf-8')
-        if len(string) > self.len_seen:
-            self.len_seen = len(string)
-            space = 0
-        else:
-            space = self.len_seen - len(string)
-        print string + ' ' * space,
+        if line.get('status') is not None:
+            string += line['status']
+            if line.get('progress') is not None:
+                string += ' ' + line['progress'].encode('utf-8')
+            if len(string) > self.len_seen:
+                self.len_seen = len(string)
+                space = 0
+            else:
+                space = self.len_seen - len(string)
+            print string + ' ' * space,
+        if line.get('error') is not None:
+            string += line['error']
+            print(string)
         sys.stdout.flush()
 
     def __call__(self, *args, **kwargs):

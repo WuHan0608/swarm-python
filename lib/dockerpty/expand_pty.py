@@ -229,7 +229,7 @@ class ExpandPseudoTerminal(object):
             rlist.append(pty)
 
             while True:
-                read_ready, write_ready = io.select(rlist, wlist, timeout=None)
+                read_ready, write_ready = io.select(rlist, wlist, timeout=60)
 
                 try:
                     if pty in read_ready:

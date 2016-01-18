@@ -91,12 +91,10 @@ class Login(object):
         cli = self.swarm.client
         if cli is not None:
             try:
-                ret = cli.login(*args, **kwargs)
+                return cli.login(*args, **kwargs)
             except errors.APIError as e:
                 print(e.explanation)
             except errors.DockerException as e:
                 print(e.explanation)
-            else:
-                print(ret['Status'])
             finally:
                 cli.close()
