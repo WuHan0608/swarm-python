@@ -28,6 +28,7 @@ class SwarmCommand(object):
             'rm': self._swarm_rm,
             'exec': self._swarm_exec,
             'top': self._swarm_top,
+            'kill': self._swarm_kill,
             'inspect': self._swarm_inspect,
             'images': self._swarm_images,
             'rmi': self._swarm_rmi,
@@ -45,7 +46,7 @@ class SwarmCommand(object):
             # Otherwise throw excepiton
             if self._args.cmd in self._commands:
                 raise
-            print('No implement `swarm {command}`'.format(command=self._args.cmd))
+            print('Not implement `swarm {command}`'.format(command=self._args.cmd))
         except requests.exceptions.ConnectionError:
             print('Connection Error: Swarm API is NOT accessible.')
         except requests.exceptions.Timeout:
@@ -97,7 +98,8 @@ class SwarmCommand(object):
         if self._args.username:
             username_input = self._args.username
             if conf.get(registry) is not None:
-                if username_input == conf[registry]['username']:
+                if username_input == conf[registry]['username'] and\
+                  self._args.password is None:
                     password_input = conf[registry]['password']
         else:
             if conf.get(registry) is not None:
@@ -107,6 +109,7 @@ class SwarmCommand(object):
                 if string in (username, ''):
                     username_input = username
                     password_input = conf[registry]['password']
+                    email_input = conf[registry]['email']
                 else:
                     username_input = string
             else:
@@ -128,7 +131,7 @@ class SwarmCommand(object):
         if self._args.email:
             email_input = self._args.email
         else:
-            if conf.get(registry) is not None:
+            if email_input is not None:
                 email_input = conf[registry]['email']
             else:
                 prompt = 'Email: '
@@ -333,6 +336,10 @@ class SwarmCommand(object):
 
     def _swarm_top(self):
         self._args.func(self._args.CONTAINER, self._args.ps_args)
+
+    def _swarm_kill(self):
+        signal = self._args.signal if self._args.signal is not None else 'SIGKILL'
+        self._args.func(tuple(self._args.CONTAINER), signal=signal)
 
     def _swarm_inspect(self):
         # print container or image inspect if type is provide

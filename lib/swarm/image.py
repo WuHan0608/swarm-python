@@ -2,7 +2,6 @@
 
 import json
 import sys
-import re
 from docker import errors
 from datetime import datetime
 from client import SwarmClient

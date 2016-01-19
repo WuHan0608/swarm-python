@@ -4,7 +4,8 @@ import argparse
 from api import SwarmApi
 from daemon import Version, Info, Login
 from container import Containers, StartContainer, StopContainer, RestartContainer,\
-                      RemoveContainer, CreateContainer, InspectContainer, Top, Exec
+                      RemoveContainer, CreateContainer, InspectContainer, Top, Exec,\
+                      Kill
 from image import Images, RemoveImage, Tag, InspectImage, Pull, Push, Build
 from utils import base_url_found
 
@@ -29,6 +30,7 @@ class SwarmArgumentParser(object):
             'run': 'swarm run [OPTIONS] IMAGE [COMMAND] [ARG...]',
             'exec': 'swarm exec [OPTIONS] CONTAINER COMMAND [ARG...]',
             'top': 'swarm top [OPTIONS] CONTAINER [ps OPTIONS]',
+            'kill': 'docker kill [OPTIONS] CONTAINER [CONTAINER...]',
             'inspect': 'swarm inspect [OPTIONS] CONTAINER|IMAGE [CONTAINER|IMAGE...]',
             'images': 'swarm images [OPTIONS] [REPOSITORY]',
             'rmi': 'swarm rmi [OPTIONS] IMAGE [IMAGE...]',
@@ -51,6 +53,7 @@ specified "https://index.docker.io/v1/" is the default.',
             'run': 'Run a command in a new container',
             'exec': 'Run a command in a running container',
             'top': 'Display the running processes of a container',
+            'kill': 'Kill a running container using SIGKILL or a specified signal',
             'inspect': 'Return low-level information on a container or image',
             'images': 'List images',
             'rmi': 'Remove one or more images',
@@ -76,6 +79,7 @@ specified "https://index.docker.io/v1/" is the default.',
             self._add_parser_images()
             self._add_parser_inspect()
             self._add_parser_top()
+            self._add_parser_kill()
             self._add_parser_rmi()
             self._add_parser_tag()
             self._add_parser_pull()
@@ -264,6 +268,16 @@ Container ID')
 e.g., aux')
         parser_top.set_defaults(func=Top())
         parser_top.set_defaults(cmd='top')
+
+    def _add_parser_kill(self):
+        parser_kill = self._subparsers.add_parser('kill', description=self._help['kill'],\
+help=self._help['kill'], usage=self._usage['kill'])
+        parser_kill.add_argument('-s', '--signal', help='\
+Signal to send to the container (Defaults to SIGKILL')
+        parser_kill.add_argument('CONTAINER', nargs='+', help='\
+Contaner ID')
+        parser_kill.set_defaults(func=Kill())
+        parser_kill.set_defaults(cmd='kill')
 
     def _add_parser_inspect(self):
         parser_inspect = self._subparsers.add_parser('inspect', description=self._help['inspect'],\

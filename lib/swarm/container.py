@@ -22,7 +22,7 @@ class ContainerBase(object):
 
     def _handle_containers(self, command, container_list, **kwargs):
         """
-        :param command(str): must be one of ['start', 'stop', 'restart', 'remove']
+        :param command(str): must be one of ['start', 'stop', 'restart', 'remove', 'kill']
         :container_list(list): list containes container ids
         :kwargs: optional keyword arguments
         """
@@ -33,6 +33,7 @@ class ContainerBase(object):
                 'stop': cli.stop,
                 'restart': cli.restart,
                 'remove': cli.remove_container,
+                'kill': cli.kill
             }
             if not command in handlers:
                 return
@@ -417,3 +418,21 @@ class Exec(ContainerBase):
                 print(e.explanation)
             finally:
                 cli.close()
+
+class Kill(ContainerBase):
+    """
+    Similar to `docker kill`
+    """
+    def __init__(self):
+        super(Kill, self).__init__()
+
+    def __call__(self, container_list, signal):
+        """
+        :param container(str): The container id to kill
+        :param signal(str or int):  The signal to send. Defaults to SIGKILL
+        """
+        containers_kill = self._handle_containers('kill', container_list, signal=signal)
+        if containers_kill is not None:
+            # print container status
+            self._get_containers(show_all=True, container_list=container_list)
+            self._pretty_print()
