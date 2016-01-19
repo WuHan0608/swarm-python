@@ -267,4 +267,6 @@ class ImageApiMixin(object):
         url = self._url("/images/{0}/tag", image)
         res = self._post(url, params=params)
         self._raise_for_status(res)
-        return res.status_code == 201
+        # Actually response code == 200
+        return res.status_code == 201 or\
+                res.status_code == 200
