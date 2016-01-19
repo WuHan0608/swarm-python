@@ -243,6 +243,7 @@ class ExpandPseudoTerminal(object):
                         if read is None or len(read) == 0:
                             pty.close()
                             break
+                        print repr(read)
                         pty.write(read)
                         while pty.do_write() == 0:
                             break
