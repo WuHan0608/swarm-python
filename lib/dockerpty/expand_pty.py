@@ -234,6 +234,8 @@ class ExpandPseudoTerminal(object):
                 try:
                     if pty in read_ready:
                         stdout.write(pty.read())
+                        while stdout.do_write() == 0:
+                            break
                         rlist.remove(pty)
                         wlist.append(pty)
                     elif pty in write_ready:
@@ -241,9 +243,8 @@ class ExpandPseudoTerminal(object):
                         if read is None or len(read) == 0:
                             pty.close()
                             break
-                        try:
-                            pty.write(read)
-                        except socket.error:
+                        pty.write(read)
+                        while pty.do_write() == 0:
                             break
                         wlist.remove(pty)
                         rlist.append(pty)

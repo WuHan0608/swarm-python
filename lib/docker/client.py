@@ -218,6 +218,7 @@ class Client(
                 if decode:
                     if six.PY3:
                         data = data.decode('utf-8')
+                    data = json.loads(data)
                 yield data
         else:
             # Response isn't chunked, meaning we probably

@@ -21,7 +21,7 @@ import six
 
 from .. import errors
 
-INDEX_NAME = 'docker.io'
+INDEX_NAME = 'index.docker.io'
 INDEX_URL = 'https://{0}/v1/'.format(INDEX_NAME)
 DOCKER_CONFIG_FILENAME = os.path.join('.docker', 'config.json')
 LEGACY_DOCKER_CONFIG_FILENAME = '.dockercfg'
@@ -41,14 +41,7 @@ def resolve_repository_name(repo_name):
             'Invalid index name ({0}). Cannot begin or end with a'
             ' hyphen.'.format(index_name)
         )
-    return resolve_index_name(index_name), remote_name
-
-
-def resolve_index_name(index_name):
-    index_name = convert_to_hostname(index_name)
-    if index_name == 'index.'+INDEX_NAME:
-        index_name = INDEX_NAME
-    return index_name
+    return index_name, remote_name
 
 
 def split_repo_name(repo_name):
@@ -69,7 +62,7 @@ def resolve_authconfig(authconfig, registry=None):
     Returns None if no match was found.
     """
     # Default to the public index server
-    registry = resolve_index_name(registry) if registry else INDEX_NAME
+    registry = convert_to_hostname(registry) if registry else INDEX_NAME
     log.debug("Looking for auth entry for {0}".format(repr(registry)))
 
     if registry in authconfig:
@@ -77,7 +70,7 @@ def resolve_authconfig(authconfig, registry=None):
         return authconfig[registry]
 
     for key, config in six.iteritems(authconfig):
-        if resolve_index_name(key) == registry:
+        if convert_to_hostname(key) == registry:
             log.debug("Found {0}".format(repr(key)))
             return config
 
@@ -87,6 +80,11 @@ def resolve_authconfig(authconfig, registry=None):
 
 def convert_to_hostname(url):
     return url.replace('http://', '').replace('https://', '').split('/', 1)[0]
+
+
+def encode_auth(auth_info):
+    return base64.b64encode(auth_info.get('username', '') + b':' +
+                            auth_info.get('password', ''))
 
 
 def decode_auth(auth):
@@ -123,7 +121,7 @@ def parse_auth(entries):
         conf[registry] = {
             'username': username,
             'password': password,
-            'email': entry.get('email'),
+            'email': entry['email'],
             'serveraddress': registry,
         }
     return conf
