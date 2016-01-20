@@ -14,14 +14,32 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
 import signal
 import socket
+from threading import Thread
 from ssl import SSLError
 
 import dockerpty.io as io
 import dockerpty.tty as tty
+
+class TCPSocketRecvThread(Thread):
+    def __init__(self, from_stream, to_stream):
+        super(TCPSocketRecvThread, self).__init__()
+        self.from_stream = from_stream
+        self.to_stream = to_stream
+
+    def run(self):
+        while True:
+            try:
+                read = self.from_stream.read(4096)
+                if read is None or len(read) == 0:
+                    self.from_stream.close()
+                    return
+                self.to_stream.write(read)
+            except EnvironmentError as e:
+                if e.errno not in io.Stream.ERRNO_RECOVERABLE:
+                    raise e
 
 
 class WINCHHandler(object):
@@ -123,7 +141,6 @@ class ExpandPseudoTerminal(object):
         self.stdout = stdout or sys.stdout
         self.stderr = stderr or sys.stderr
         self.stdin = stdin or sys.stdin
-        self.pty = None
 
 
     def start(self):
@@ -224,32 +241,17 @@ class ExpandPseudoTerminal(object):
             self.resize()
 
             stdin, stdout = io.Stream(self.stdin), io.Stream(self.stdout)
-            rlist = [ stdin ]
-            wlist = [ stdout ]
-            rlist.append(pty)
-
+            thread = TCPSocketRecvThread(pty, stdout)
+            thread.start()
             while True:
-                read_ready, write_ready = io.select(rlist, wlist, timeout=60)
-
                 try:
-                    if pty in read_ready:
-                        stdout.write(pty.read())
-                        while stdout.do_write() == 0:
-                            break
-                        rlist.remove(pty)
-                        wlist.append(pty)
-                    elif pty in write_ready:
-                        read = stdin.read()
-                        if read is None or len(read) == 0:
-                            pty.close()
-                            break
-                        print repr(read)
-                        pty.write(read)
-                        while pty.do_write() == 0:
-                            break
-                        wlist.remove(pty)
-                        rlist.append(pty)
-
+                    read = stdin.read()
+                    pty.write(read)
+                    if pty.needs_write():
+                        pty.do_write
+                except socket.error:
+                    thread.join()
+                    break
                 except SSLError as e:
                     if 'The operation did not complete' not in e.strerror:
                         raise e
