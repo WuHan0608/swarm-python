@@ -16,7 +16,6 @@
 
 import sys
 import signal
-import socket
 from threading import Thread
 from ssl import SSLError
 
@@ -34,7 +33,6 @@ class TCPSocketRecvThread(Thread):
             try:
                 read = self.from_stream.read(4096)
                 if read is None or len(read) == 0:
-                    self.from_stream.close()
                     return
                 self.to_stream.write(read)
             except EnvironmentError as e:
@@ -246,12 +244,14 @@ class ExpandPseudoTerminal(object):
             while True:
                 try:
                     read = stdin.read()
+                    if not thread.isAlive():
+                        pty.close()
+                        break
                     pty.write(read)
                     if pty.needs_write():
-                        pty.do_write
-                except socket.error:
-                    thread.join()
-                    break
+                        pty.do_write()
                 except SSLError as e:
                     if 'The operation did not complete' not in e.strerror:
                         raise e
+            thread.join()
+            
