@@ -253,5 +253,5 @@ class ExpandPseudoTerminal(object):
                 except SSLError as e:
                     if 'The operation did not complete' not in e.strerror:
                         raise e
-            thread.join()
-            
+            if thread.isAlive():
+                thread.join()
