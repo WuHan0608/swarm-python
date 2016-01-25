@@ -128,7 +128,7 @@ class RemoveImage(Images):
                 except errors.APIError as e:
                     print(e.explanation)
                     images_err.add(image)
-                except errors.DockeException as e:
+                except errors.DockerException as e:
                     print(e.explanation)
                     images_err.add(image)
             cli.close()
