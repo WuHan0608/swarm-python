@@ -51,7 +51,7 @@ class SwarmClient(object):
                 # An exception will be raised if the endpoint isn't responding.
                 if cli.ping() == 'OK':
                     cli.close()
-                    return Client(base_url, version=self.version, timeout=None)
+                    return Client(base_url, version=self.version, timeout=3600)
                 return
             except errors.DockerException as e:
                 print(e)
