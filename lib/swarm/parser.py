@@ -210,6 +210,10 @@ Keep STDIN open even if not attached')
 Set meta data on a container')
         parser_run.add_argument('--link', action='append', help='\
 Add link to another container')
+        parser_run.add_argument('--log-driver',type=str,help='\
+Logging driver for container')
+        parser_run.add_argument('--log-opt',action='append',help='\
+Log driver options')
         parser_run.add_argument('-m', '--memory', type=str, help='\
 Memory limit')
         parser_run.add_argument('--name', type=str, help='\
