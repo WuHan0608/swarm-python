@@ -148,7 +148,7 @@ class ImageApiMixin(object):
         self._raise_for_status(res)
 
     def pull(self, repository, tag=None, stream=False,
-             insecure_registry=False, auth_config=None):
+             insecure_registry=False, auth_config=None, decode=False):
         if insecure_registry:
             warnings.warn(
                 INSECURE_REGISTRY_DEPRECATION_WARNING.format('pull()'),
@@ -200,12 +200,12 @@ class ImageApiMixin(object):
         self._raise_for_status(response)
 
         if stream:
-            return self._stream_helper(response)
+            return self._stream_helper(response, decode=decode)
 
         return self._result(response)
 
     def push(self, repository, tag=None, stream=False,
-             insecure_registry=False):
+             insecure_registry=False, decode=False):
         if insecure_registry:
             warnings.warn(
                 INSECURE_REGISTRY_DEPRECATION_WARNING.format('push()'),
@@ -241,7 +241,7 @@ class ImageApiMixin(object):
         self._raise_for_status(response)
 
         if stream:
-            return self._stream_helper(response)
+            return self._stream_helper(response, decode=decode)
 
         return self._result(response)
 
@@ -267,6 +267,4 @@ class ImageApiMixin(object):
         url = self._url("/images/{0}/tag", image)
         res = self._post(url, params=params)
         self._raise_for_status(res)
-        # Actually response code == 200
-        return res.status_code == 201 or\
-                res.status_code == 200
+        return res.status_code == 201

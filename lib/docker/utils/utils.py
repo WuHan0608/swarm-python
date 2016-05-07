@@ -91,10 +91,10 @@ def decode_json_header(header):
     return json.loads(data)
 
 
-def tar(path, exclude=None, dockerfile=None, fileobj=None):
+def tar(path, exclude=None, dockerfile=None, fileobj=None, gzip=False):
     if not fileobj:
         fileobj = tempfile.NamedTemporaryFile()
-    t = tarfile.open(mode='w', fileobj=fileobj)
+    t = tarfile.open(mode='w:gz' if gzip else 'w', fileobj=fileobj)
 
     root = os.path.abspath(path)
     exclude = exclude or []
@@ -128,7 +128,13 @@ def exclude_paths(root, patterns, dockerfile=None):
     paths = get_paths(root, exclude_patterns, include_patterns,
                       has_exceptions=len(exceptions) > 0)
 
-    return set(paths)
+    return set(paths).union(
+        # If the Dockerfile is in a subdirectory that is excluded, get_paths
+        # will not descend into it and the file will be skipped. This ensures
+        # it doesn't happen.
+        set([dockerfile])
+        if os.path.exists(os.path.join(root, dockerfile)) else set()
+    )
 
 
 def should_include(path, exclude_patterns, include_patterns):
@@ -331,6 +337,35 @@ def convert_volume_binds(binds):
     return result
 
 
+def convert_tmpfs_mounts(tmpfs):
+    if isinstance(tmpfs, dict):
+        return tmpfs
+
+    if not isinstance(tmpfs, list):
+        raise ValueError(
+            'Expected tmpfs value to be either a list or a dict, found: {}'
+            .format(type(tmpfs).__name__)
+        )
+
+    result = {}
+    for mount in tmpfs:
+        if isinstance(mount, six.string_types):
+            if ":" in mount:
+                name, options = mount.split(":", 1)
+            else:
+                name = mount
+                options = ""
+
+        else:
+            raise ValueError(
+                "Expected item in tmpfs list to be a string, found: {}"
+                .format(type(mount).__name__)
+            )
+
+        result[name] = options
+    return result
+
+
 def parse_repository_tag(repo_name):
     parts = repo_name.rsplit('@', 1)
     if len(parts) == 2:
@@ -345,7 +380,7 @@ def parse_repository_tag(repo_name):
 # fd:// protocol unsupported (for obvious reasons)
 # Added support for http and https
 # Protocol translation: tcp -> http, unix -> http+unix
-def parse_host(addr, platform=None):
+def parse_host(addr, platform=None, tls=False):
     proto = "http+unix"
     host = DEFAULT_HTTP_HOST
     port = None
@@ -365,11 +400,12 @@ def parse_host(addr, platform=None):
 
     if addr == 'tcp://':
         raise errors.DockerException(
-            "Invalid bind address format: {0}".format(addr))
+            "Invalid bind address format: {0}".format(addr)
+        )
     elif addr.startswith('unix://'):
         addr = addr[7:]
     elif addr.startswith('tcp://'):
-        proto = "http"
+        proto = 'http{0}'.format('s' if tls else '')
         addr = addr[6:]
     elif addr.startswith('https://'):
         proto = "https"
@@ -381,7 +417,7 @@ def parse_host(addr, platform=None):
             raise errors.DockerException(
                 "Invalid bind address protocol: {0}".format(addr)
             )
-        proto = "http"
+        proto = "https" if tls else "http"
 
     if proto != "http+unix" and ":" in addr:
         host_parts = addr.split(':')
@@ -443,28 +479,49 @@ def parse_devices(devices):
     return device_list
 
 
-def kwargs_from_env(ssl_version=None, assert_hostname=None):
-    host = os.environ.get('DOCKER_HOST')
-    cert_path = os.environ.get('DOCKER_CERT_PATH')
-    tls_verify = os.environ.get('DOCKER_TLS_VERIFY')
+def kwargs_from_env(ssl_version=None, assert_hostname=None, environment=None):
+    if not environment:
+        environment = os.environ
+    host = environment.get('DOCKER_HOST')
+
+    # empty string for cert path is the same as unset.
+    cert_path = environment.get('DOCKER_CERT_PATH') or None
+
+    # empty string for tls verify counts as "false".
+    # Any value or 'unset' counts as true.
+    tls_verify = environment.get('DOCKER_TLS_VERIFY')
+    if tls_verify == '':
+        tls_verify = False
+    else:
+        tls_verify = tls_verify is not None
+    enable_tls = cert_path or tls_verify
 
     params = {}
 
     if host:
-        params['base_url'] = (host.replace('tcp://', 'https://')
-                              if tls_verify else host)
+        params['base_url'] = (
+            host.replace('tcp://', 'https://') if enable_tls else host
+        )
 
-    if tls_verify and not cert_path:
+    if not enable_tls:
+        return params
+
+    if not cert_path:
         cert_path = os.path.join(os.path.expanduser('~'), '.docker')
 
-    if tls_verify and cert_path:
-        params['tls'] = tls.TLSConfig(
-            client_cert=(os.path.join(cert_path, 'cert.pem'),
-                         os.path.join(cert_path, 'key.pem')),
-            ca_cert=os.path.join(cert_path, 'ca.pem'),
-            verify=True,
-            ssl_version=ssl_version,
-            assert_hostname=assert_hostname)
+    if not tls_verify and assert_hostname is None:
+        # assert_hostname is a subset of TLS verification,
+        # so if it's not set already then set it to false.
+        assert_hostname = False
+
+    params['tls'] = tls.TLSConfig(
+        client_cert=(os.path.join(cert_path, 'cert.pem'),
+                     os.path.join(cert_path, 'key.pem')),
+        ca_cert=os.path.join(cert_path, 'ca.pem'),
+        verify=tls_verify,
+        ssl_version=ssl_version,
+        assert_hostname=assert_hostname,
+    )
 
     return params
 
@@ -493,40 +550,42 @@ def longint(n):
 
 
 def parse_bytes(s):
+    if isinstance(s, six.integer_types + (float,)):
+        return s
     if len(s) == 0:
-        s = 0
+        return 0
+
+    if s[-2:-1].isalpha() and s[-1].isalpha():
+        if s[-1] == "b" or s[-1] == "B":
+            s = s[:-1]
+    units = BYTE_UNITS
+    suffix = s[-1].lower()
+
+    # Check if the variable is a string representation of an int
+    # without a units part. Assuming that the units are bytes.
+    if suffix.isdigit():
+        digits_part = s
+        suffix = 'b'
     else:
-        if s[-2:-1].isalpha() and s[-1].isalpha():
-            if s[-1] == "b" or s[-1] == "B":
-                s = s[:-1]
-        units = BYTE_UNITS
-        suffix = s[-1].lower()
+        digits_part = s[:-1]
 
-        # Check if the variable is a string representation of an int
-        # without a units part. Assuming that the units are bytes.
-        if suffix.isdigit():
-            digits_part = s
-            suffix = 'b'
-        else:
-            digits_part = s[:-1]
-
-        if suffix in units.keys() or suffix.isdigit():
-            try:
-                digits = longint(digits_part)
-            except ValueError:
-                raise errors.DockerException(
-                    'Failed converting the string value for memory ({0}) to'
-                    ' an integer.'.format(digits_part)
-                )
-
-            # Reconvert to long for the final result
-            s = longint(digits * units[suffix])
-        else:
+    if suffix in units.keys() or suffix.isdigit():
+        try:
+            digits = longint(digits_part)
+        except ValueError:
             raise errors.DockerException(
-                'The specified value for memory ({0}) should specify the'
-                ' units. The postfix should be one of the `b` `k` `m` `g`'
-                ' characters'.format(s)
+                'Failed converting the string value for memory ({0}) to'
+                ' an integer.'.format(digits_part)
             )
+
+        # Reconvert to long for the final result
+        s = longint(digits * units[suffix])
+    else:
+        raise errors.DockerException(
+            'The specified value for memory ({0}) should specify the'
+            ' units. The postfix should be one of the `b` `k` `m` `g`'
+            ' characters'.format(s)
+        )
 
     return s
 
@@ -556,7 +615,8 @@ def create_host_config(binds=None, port_bindings=None, lxc_conf=None,
                        security_opt=None, ulimits=None, log_config=None,
                        mem_limit=None, memswap_limit=None, mem_swappiness=None,
                        cgroup_parent=None, group_add=None, cpu_quota=None,
-                       cpu_period=None, oom_kill_disable=False, version=None):
+                       cpu_period=None, oom_kill_disable=False, shm_size=None,
+                       version=None, tmpfs=None, oom_score_adj=None):
 
     host_config = {}
 
@@ -568,16 +628,10 @@ def create_host_config(binds=None, port_bindings=None, lxc_conf=None,
         version = constants.DEFAULT_DOCKER_API_VERSION
 
     if mem_limit is not None:
-        if isinstance(mem_limit, six.string_types):
-            mem_limit = parse_bytes(mem_limit)
-
-        host_config['Memory'] = mem_limit
+        host_config['Memory'] = parse_bytes(mem_limit)
 
     if memswap_limit is not None:
-        if isinstance(memswap_limit, six.string_types):
-            memswap_limit = parse_bytes(memswap_limit)
-
-        host_config['MemorySwap'] = memswap_limit
+        host_config['MemorySwap'] = parse_bytes(memswap_limit)
 
     if mem_swappiness is not None:
         if version_lt(version, '1.20'):
@@ -588,6 +642,12 @@ def create_host_config(binds=None, port_bindings=None, lxc_conf=None,
             )
 
         host_config['MemorySwappiness'] = mem_swappiness
+
+    if shm_size is not None:
+        if isinstance(shm_size, six.string_types):
+            shm_size = parse_bytes(shm_size)
+
+        host_config['ShmSize'] = shm_size
 
     if pid_mode not in (None, 'host'):
         raise host_config_value_error('pid_mode', pid_mode)
@@ -605,6 +665,15 @@ def create_host_config(binds=None, port_bindings=None, lxc_conf=None,
             raise host_config_version_error('oom_kill_disable', '1.19')
 
         host_config['OomKillDisable'] = oom_kill_disable
+
+    if oom_score_adj:
+        if version_lt(version, '1.22'):
+            raise host_config_version_error('oom_score_adj', '1.22')
+        if not isinstance(oom_score_adj, int):
+            raise host_config_type_error(
+                'oom_score_adj', oom_score_adj, 'int'
+            )
+        host_config['OomScoreAdj'] = oom_score_adj
 
     if publish_all_ports:
         host_config['PublishAllPorts'] = publish_all_ports
@@ -674,12 +743,7 @@ def create_host_config(binds=None, port_bindings=None, lxc_conf=None,
         host_config['ExtraHosts'] = extra_hosts
 
     if links is not None:
-        if isinstance(links, dict):
-            links = six.iteritems(links)
-
-        formatted_links = ['{0}:{1}'.format(k, v) for k, v in sorted(links)]
-
-        host_config['Links'] = formatted_links
+        host_config['Links'] = normalize_links(links)
 
     if isinstance(lxc_conf, dict):
         formatted = []
@@ -728,7 +792,19 @@ def create_host_config(binds=None, port_bindings=None, lxc_conf=None,
 
         host_config['CpuPeriod'] = cpu_period
 
+    if tmpfs:
+        if version_lt(version, '1.22'):
+            raise host_config_version_error('tmpfs', '1.22')
+        host_config["Tmpfs"] = convert_tmpfs_mounts(tmpfs)
+
     return host_config
+
+
+def normalize_links(links):
+    if isinstance(links, dict):
+        links = six.iteritems(links)
+
+    return ['{0}:{1}'.format(k, v) for k, v in sorted(links)]
 
 
 def create_networking_config(endpoints_config=None):
@@ -740,13 +816,18 @@ def create_networking_config(endpoints_config=None):
     return networking_config
 
 
-def create_endpoint_config(version, aliases=None):
+def create_endpoint_config(version, aliases=None, links=None):
     endpoint_config = {}
 
     if aliases:
         if version_lt(version, '1.22'):
             raise host_config_version_error('endpoint_config.aliases', '1.22')
         endpoint_config["Aliases"] = aliases
+
+    if links:
+        if version_lt(version, '1.22'):
+            raise host_config_version_error('endpoint_config.links', '1.22')
+        endpoint_config["Links"] = normalize_links(links)
 
     return endpoint_config
 
@@ -764,7 +845,7 @@ def parse_env_file(env_file):
             if line[0] == '#':
                 continue
 
-            parse_line = line.strip().split('=')
+            parse_line = line.strip().split('=', 1)
             if len(parse_line) == 2:
                 k, v = parse_line
                 environment[k] = v
@@ -782,6 +863,14 @@ def split_command(command):
     return shlex.split(command)
 
 
+def format_environment(environment):
+    def format_env(key, value):
+        if value is None:
+            return key
+        return '{key}={value}'.format(key=key, value=value)
+    return [format_env(*var) for var in six.iteritems(environment)]
+
+
 def create_container_config(
     version, image, command, hostname=None, user=None, detach=False,
     stdin_open=False, tty=False, mem_limit=None, ports=None, environment=None,
@@ -797,10 +886,7 @@ def create_container_config(
         entrypoint = split_command(entrypoint)
 
     if isinstance(environment, dict):
-        environment = [
-            six.text_type('{0}={1}').format(k, v)
-            for k, v in six.iteritems(environment)
-        ]
+        environment = format_environment(environment)
 
     if labels is not None and compare_version('1.18', version) < 0:
         raise errors.InvalidVersion(
@@ -834,9 +920,9 @@ def create_container_config(
     if isinstance(labels, list):
         labels = dict((lbl, six.text_type('')) for lbl in labels)
 
-    if isinstance(mem_limit, six.string_types):
+    if mem_limit is not None:
         mem_limit = parse_bytes(mem_limit)
-    if isinstance(memswap_limit, six.string_types):
+    if memswap_limit is not None:
         memswap_limit = parse_bytes(memswap_limit)
 
     if isinstance(ports, list):
@@ -882,7 +968,7 @@ def create_container_config(
 
     if compare_version('1.10', version) >= 0:
         message = ('{0!r} parameter has no effect on create_container().'
-                   ' It has been moved to start()')
+                   ' It has been moved to host_config')
         if dns is not None:
             raise errors.InvalidVersion(message.format('dns'))
         if volumes_from is not None:

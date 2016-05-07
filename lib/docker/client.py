@@ -28,8 +28,12 @@ from . import errors
 from .auth import auth
 from .unixconn import unixconn
 from .ssladapter import ssladapter
-from .utils import utils, check_resource, update_headers
+from .utils import utils, check_resource, update_headers, kwargs_from_env
 from .tls import TLSConfig
+
+
+def from_env(**kwargs):
+    return Client.from_env(**kwargs)
 
 
 class Client(
@@ -45,17 +49,17 @@ class Client(
                  timeout=constants.DEFAULT_TIMEOUT_SECONDS, tls=False):
         super(Client, self).__init__()
 
-        if tls and (not base_url or not base_url.startswith('https://')):
+        if tls and not base_url:
             raise errors.TLSParameterError(
-                'If using TLS, the base_url argument must begin with '
-                '"https://".')
+                'If using TLS, the base_url argument must be provided.'
+            )
 
         self.base_url = base_url
         self.timeout = timeout
 
         self._auth_configs = auth.load_config()
 
-        base_url = utils.parse_host(base_url, sys.platform)
+        base_url = utils.parse_host(base_url, sys.platform, tls=bool(tls))
         if base_url.startswith('http+unix://'):
             self._custom_adapter = unixconn.UnixAdapter(base_url, timeout)
             self.mount('http+docker://', self._custom_adapter)
@@ -83,6 +87,10 @@ class Client(
                     type(version).__name__
                 )
             )
+
+    @classmethod
+    def from_env(cls, **kwargs):
+        return cls(**kwargs_from_env(**kwargs))
 
     def _retrieve_server_version(self):
         try:
