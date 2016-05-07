@@ -194,6 +194,7 @@ class SwarmCommand(object):
         ports = None
         port_bindings = None
         volumes = None
+        dns = self._args.dns if self._args.dns is not None else []
         # handle container lables
         if self._args.label is not None:
             labels = {}
@@ -267,6 +268,7 @@ class SwarmCommand(object):
                                                   publish_all_ports=self._args.publish_all,\
                                                   links=links,\
                                                   privileged=self._args.privileged,\
+                                                  dns=dns,\
                                                   volumes_from=self._args.volumes_from,\
                                                   network_mode=self._args.net,\
                                                   restart_policy={'Name': self._args.restart},\

@@ -196,6 +196,8 @@ Run container in background')
 Automatically remove the container when it exits')
         parser_run.add_argument('--cpuset-cpus', type=str, help='\
 CPUs in which to allow execution (0-3, 0,1)')
+        parser_run.add_argument('--dns', action='append', help='\
+Set custom DNS servers')
         parser_run.add_argument('-e', '--environment', action='append', help='\
 Set environment variables')
         parser_run.add_argument('--entrypoint', type=str, help='\
