@@ -196,6 +196,8 @@ Run container in background')
 Automatically remove the container when it exits')
         parser_run.add_argument('--cpuset-cpus', type=str, help='\
 CPUs in which to allow execution (0-3, 0,1)')
+        parser_run.add_argument('--dns', action='append', help='\
+Set custom DNS servers')
         parser_run.add_argument('-e', '--environment', action='append', help='\
 Set environment variables')
         parser_run.add_argument('--entrypoint', type=str, help='\
@@ -208,6 +210,10 @@ Keep STDIN open even if not attached')
 Set meta data on a container')
         parser_run.add_argument('--link', action='append', help='\
 Add link to another container')
+        parser_run.add_argument('--log-driver',type=str,help='\
+Logging driver for container')
+        parser_run.add_argument('--log-opt',action='append',help='\
+Log driver options')
         parser_run.add_argument('-m', '--memory', type=str, help='\
 Memory limit')
         parser_run.add_argument('--name', type=str, help='\

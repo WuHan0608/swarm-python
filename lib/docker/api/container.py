@@ -40,13 +40,14 @@ class ContainerApiMixin(object):
 
     @utils.check_resource
     def commit(self, container, repository=None, tag=None, message=None,
-               author=None, conf=None):
+               author=None, changes=None, conf=None):
         params = {
             'container': container,
             'repo': repository,
             'tag': tag,
             'comment': message,
-            'author': author
+            'author': author,
+            'changes': changes
         }
         u = self._url("/commit")
         return self._result(self._post_json(u, data=conf, params=params),
@@ -193,12 +194,14 @@ class ContainerApiMixin(object):
 
     @utils.check_resource
     def logs(self, container, stdout=True, stderr=True, stream=False,
-             timestamps=False, tail='all', since=None):
+             timestamps=False, tail='all', since=None, follow=None):
         if utils.compare_version('1.11', self._version) >= 0:
+            if follow is None:
+                follow = stream
             params = {'stderr': stderr and 1 or 0,
                       'stdout': stdout and 1 or 0,
                       'timestamps': timestamps and 1 or 0,
-                      'follow': stream and 1 or 0,
+                      'follow': follow and 1 or 0,
                       }
             if utils.compare_version('1.13', self._version) >= 0:
                 if tail != 'all' and (not isinstance(tail, int) or tail < 0):
@@ -395,6 +398,39 @@ class ContainerApiMixin(object):
         url = self._url('/containers/{0}/unpause', container)
         res = self._post(url)
         self._raise_for_status(res)
+
+    @utils.minimum_version('1.22')
+    @utils.check_resource
+    def update_container(
+        self, container, blkio_weight=None, cpu_period=None, cpu_quota=None,
+        cpu_shares=None, cpuset_cpus=None, cpuset_mems=None, mem_limit=None,
+        mem_reservation=None, memswap_limit=None, kernel_memory=None
+    ):
+        url = self._url('/containers/{0}/update', container)
+        data = {}
+        if blkio_weight:
+            data['BlkioWeight'] = blkio_weight
+        if cpu_period:
+            data['CpuPeriod'] = cpu_period
+        if cpu_shares:
+            data['CpuShares'] = cpu_shares
+        if cpu_quota:
+            data['CpuQuota'] = cpu_quota
+        if cpuset_cpus:
+            data['CpusetCpus'] = cpuset_cpus
+        if cpuset_mems:
+            data['CpusetMems'] = cpuset_mems
+        if mem_limit:
+            data['Memory'] = utils.parse_bytes(mem_limit)
+        if mem_reservation:
+            data['MemoryReservation'] = utils.parse_bytes(mem_reservation)
+        if memswap_limit:
+            data['MemorySwap'] = utils.parse_bytes(memswap_limit)
+        if kernel_memory:
+            data['KernelMemory'] = utils.parse_bytes(kernel_memory)
+
+        res = self._post_json(url, data=data)
+        return self._result(res, True)
 
     @utils.check_resource
     def wait(self, container, timeout=None):

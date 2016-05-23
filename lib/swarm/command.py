@@ -194,6 +194,7 @@ class SwarmCommand(object):
         ports = None
         port_bindings = None
         volumes = None
+        dns = self._args.dns if self._args.dns is not None else []
         # handle container lables
         if self._args.label is not None:
             labels = {}
@@ -211,11 +212,28 @@ class SwarmCommand(object):
                 if item.count(':') == 0:
                     name = alias = item
                 elif item.count(':') == 1:
-                    name, value = item.split(':')
+                    name, alias = item.split(':')
                 else:
                     print('bad format for link (expected name:alias)')
                     exit(1)
                 links[name] = alias
+        # handle log-driver options
+        log_driver = self._args.log_driver
+        if log_driver == 'none':
+            print('--log-driver=none is not supported yet.')
+            exit(1)
+        log_config = {
+            'type': log_driver,
+            'config': {}
+        }
+        if self._args.log_opt is not None:
+            for opt in self._args.log_opt:
+                if opt.count('=') == 1:
+                    name, value = opt.split('=')
+                    log_config['config'][name] = value
+                else:
+                    print('bad format for log-opt (expected name=value)')
+                    exit(1)
         # handle published ports
         if self._args.publish is not None:
             ports = []
@@ -232,7 +250,7 @@ class SwarmCommand(object):
                     hostIp, hostPort, containerPort = item.split(':')
                     port_bindings[containerPort] = (hostIp, hostPort) if hostPort else (hostIp,)
                 else:
-                    print('bad format of publish \
+                    print('bad format for publish \
 (expected ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort')
                     exit(1)
                 if containerPort.find('/udp') > 0:
@@ -267,9 +285,11 @@ class SwarmCommand(object):
                                                   publish_all_ports=self._args.publish_all,\
                                                   links=links,\
                                                   privileged=self._args.privileged,\
+                                                  dns=dns,\
                                                   volumes_from=self._args.volumes_from,\
                                                   network_mode=self._args.net,\
                                                   restart_policy={'Name': self._args.restart},\
+                                                  log_config=log_config,\
                                                   mem_limit=self._args.memory)
         # build kwargs
         #print(host_config)
@@ -284,7 +304,6 @@ class SwarmCommand(object):
             'rm': self._args.rm,
             'ports': ports,
             'environment': self._args.environment,
-            'dns': None,
             'volumes': volumes,
             'network_disabled': False,
             'name': self._args.name,
@@ -303,7 +322,7 @@ class SwarmCommand(object):
         self._args.func(image, command=kwargs['command'], hostname=kwargs['hostname'],\
                         user=kwargs['user'],detach=kwargs['detach'],stdin_open=kwargs['stdin_open'],\
                         tty=kwargs['tty'],rm=kwargs['rm'],mem_limit=None,ports=kwargs['ports'],\
-                        environment=kwargs['environment'],dns=kwargs['dns'],volumes=kwargs['volumes'],\
+                        environment=kwargs['environment'],volumes=kwargs['volumes'],\
                         volumes_from=None,network_disabled=kwargs['network_disabled'],\
                         name=kwargs['name'],entrypoint=kwargs['entrypoint'],\
                         cpu_shares=kwargs['cpu_shares'],working_dir=kwargs['working_dir'],\

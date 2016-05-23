@@ -46,7 +46,7 @@ def resolve_repository_name(repo_name):
 
 def resolve_index_name(index_name):
     index_name = convert_to_hostname(index_name)
-    if index_name == 'index.'+INDEX_NAME:
+    if index_name == 'index.' + INDEX_NAME:
         index_name = INDEX_NAME
     return index_name
 
@@ -102,12 +102,14 @@ def encode_header(auth):
     return base64.urlsafe_b64encode(auth_json)
 
 
-def parse_auth(entries):
+def parse_auth(entries, raise_on_error=False):
     """
     Parses authentication entries
 
     Args:
-      entries: Dict of authentication entries.
+      entries:        Dict of authentication entries.
+      raise_on_error: If set to true, an invalid format will raise
+                      InvalidConfigFile
 
     Returns:
       Authentication registry.
@@ -115,6 +117,29 @@ def parse_auth(entries):
 
     conf = {}
     for registry, entry in six.iteritems(entries):
+        if not isinstance(entry, dict):
+            log.debug(
+                'Config entry for key {0} is not auth config'.format(registry)
+            )
+            # We sometimes fall back to parsing the whole config as if it was
+            # the auth config by itself, for legacy purposes. In that case, we
+            # fail silently and return an empty conf if any of the keys is not
+            # formatted properly.
+            if raise_on_error:
+                raise errors.InvalidConfigFile(
+                    'Invalid configuration for registry {0}'.format(registry)
+                )
+            return {}
+        if 'auth' not in entry:
+            # Starting with engine v1.11 (API 1.23), an empty dictionary is
+            # a valid value in the auths config.
+            # https://github.com/docker/compose/issues/3265
+            log.debug(
+                'Auth data for {0} is absent. Client might be using a '
+                'credentials store instead.'
+            )
+            return {}
+
         username, password = decode_auth(entry['auth'])
         log.debug(
             'Found entry (registry={0}, username={1})'
@@ -170,10 +195,13 @@ def load_config(config_path=None):
             res = {}
             if data.get('auths'):
                 log.debug("Found 'auths' section")
-                res.update(parse_auth(data['auths']))
+                res.update(parse_auth(data['auths'], raise_on_error=True))
             if data.get('HttpHeaders'):
                 log.debug("Found 'HttpHeaders' section")
                 res.update({'HttpHeaders': data['HttpHeaders']})
+            if data.get('credsStore'):
+                log.debug("Found 'credsStore' section")
+                res.update({'credsStore': data['credsStore']})
             if res:
                 return res
             else:
