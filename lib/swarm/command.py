@@ -266,9 +266,9 @@ class SwarmCommand(object):
                 if item.count(':') == 0:
                     volumes.append(item)
                 elif item.count(':') == 1:
-                    volumes.append(item[1])
+                    volumes.append(item.split(':')[1])
                 elif item.count(':') == 2:
-                    volumes.append(item[1])
+                    volumes.append(item.split(':')[1])
                 else:
                     print('bad format of volume \
 (expected containerPath | hostPath:containerPath | hostPath:containerPath:[ro|rw]')
