@@ -1,13 +1,13 @@
 # -*- coding: utf8 -*-
 
+from __future__ import print_function
 from docker import errors
-from client import SwarmClient
-from utils import byteformat
+from swarm.client import SwarmClient
+from swarm.utils import byteformat
+
 
 class Version(object):
-    """
-    Similar to `docker version`
-    """
+
     def __init__(self):
         self.swarm = SwarmClient()
 
@@ -19,7 +19,7 @@ class Version(object):
             cli.close()
             if self.swarm.version is not None:
                 apiversion = ret['ApiVersion'] if self.swarm.version == 'auto'\
-                                                        else self.swarm.version
+                                               else self.swarm.version
                 string += '''\
 Client:
 API version:  {ApiVersion}\n
@@ -32,21 +32,19 @@ Go version:   {GoVersion}
 Git commit:   {GitCommit}
 Built:        {KernelVersion}
 OS/Arch:      {Os}/{Arch}\
-'''.format(\
-Version=ret['Version'],\
-ApiVersion=ret['ApiVersion'],\
-GoVersion=ret['GoVersion'],\
-GitCommit=ret['GitCommit'],\
-KernelVersion=ret['KernelVersion'],\
-Os=ret['Os'],\
+'''.format(
+Version=ret['Version'],
+ApiVersion=ret['ApiVersion'],
+GoVersion=ret['GoVersion'],
+GitCommit=ret['GitCommit'],
+KernelVersion=ret['KernelVersion'],
+Os=ret['Os'],
 Arch=ret['Arch'])
             print(string)
 
 
 class Info(object):
-    """
-    Similar to `docker info`
-    """
+
     def __init__(self):
         self.swarm = SwarmClient()
 
@@ -55,27 +53,32 @@ class Info(object):
         if cli is not None:
             ret = cli.info()
             cli.close()
+            # DriverStatus is deprecated since api v1.23
+            # Use SystemStatus instead
+            if ret['DriverStatus'] is None:
+                systemstatus = ret['SystemStatus']
+            else:
+                systemstatus = ret['DriverStatus']
             string = '''\
 Containers: {Containers}
 Images: {Images}
-{DriverStatus}
+{SystemStatus}
 CPUs: {NCPU}
 Total Memory: {MemTotal}
 Name: {Name}\
-'''.format(\
-Containers=ret['Containers'],\
-Images=ret['Images'],\
-DriverStatus='\n'.join([ ': '.join((item[0].encode('utf8'), item[1].encode('utf8')))\
-                                                for item in ret['DriverStatus']]),\
-NCPU=ret['NCPU'],\
-MemTotal=byteformat(ret['MemTotal']),\
+'''.format(
+Containers=ret['Containers'],
+Images=ret['Images'],
+SystemStatus='\n'.join([': '.join((item[0].encode('utf8'), item[1].encode('utf8')))\
+                                                          for item in SystemStatus]),
+NCPU=ret['NCPU'],
+MemTotal=byteformat(ret['MemTotal']),
 Name=ret['Name'])
             print(string)
 
+
 class Login(object):
-    """
-    Similar to `docker login`
-    """
+
     def __init__(self):
         self.swarm = SwarmClient()
 
@@ -92,9 +95,7 @@ class Login(object):
         if cli is not None:
             try:
                 return cli.login(*args, **kwargs)
-            except errors.APIError as e:
-                print(e.explanation)
-            except errors.DockerException as e:
+            except (errors.APIError, errors.DockerException) as e:
                 print(e.explanation)
             finally:
                 cli.close()

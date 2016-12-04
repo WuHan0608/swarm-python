@@ -3,6 +3,7 @@
 import json
 import string
 
+
 def byteformat(size, base=1024, unit='B'):
     """
     Convert byte to KiB / MiB / GiB / TiB if possible
@@ -12,6 +13,7 @@ def byteformat(size, base=1024, unit='B'):
         return '{s:.2f} {u}'.format(s=size,u=unit)
     return byteformat(size/float(base), base, units[units.index(unit)+1])
 
+
 def timeformat(time, unit='second'):
     """
     Convert second to minute / hour if possible
@@ -19,8 +21,9 @@ def timeformat(time, unit='second'):
     units = ('second', 'minute', 'hour')
     if time < 60:
         suffix = 's' if time > 1 else ''
-        return '{t} {u}{s} ago'.format(t=time,u=unit,s=suffix)
+        return '{t:.0f} {u}{s} ago'.format(t=time,u=unit,s=suffix)
     return timeformat(time/60, units[units.index(unit)+1])
+
 
 def base_url_found(config):
     try:
@@ -34,6 +37,7 @@ def base_url_found(config):
     except IOError:
         return False
 
+
 def current_url_found(config):
     try:
         with open(config, 'r') as fp:
@@ -46,10 +50,10 @@ def current_url_found(config):
     except IOError:
         return False
 
+
 # The following helper functions are copied from Ansible.
 # Thanks the ansible team for the awesome codes.
 # Now range such as db[01:10].example.com is avaliable.
-
 def detect_range(line = None):
     '''
     A helper function that checks a given host line to see if it contains
@@ -61,6 +65,7 @@ def detect_range(line = None):
         return True
     else:
         return False
+
 
 def expand_hostname_range(line = None):
     '''

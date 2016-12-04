@@ -2,9 +2,11 @@
 
 import json
 from docker import Client, errors
-from api import SwarmApi
+from swarm.api import SwarmApi
+
 
 class SwarmClient(object):
+
     def __init__(self):
         self._config = SwarmApi().config
         self.count = 0
@@ -51,7 +53,7 @@ class SwarmClient(object):
                 # An exception will be raised if the endpoint isn't responding.
                 if cli.ping() == 'OK':
                     cli.close()
-                    return Client(base_url, version=self.version, timeout=3600)
+                    return Client(base_url, version=self.version, timeout=600)
                 return
             except errors.DockerException as e:
                 print(e)

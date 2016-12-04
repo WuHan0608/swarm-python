@@ -3,10 +3,9 @@
 import os
 import json
 
+
 class SwarmApi(object):
-    """
-    swarm api
-    """
+
     def __init__(self):
         # config: $HOME/.swarm/config.json
         self._config = os.path.join(os.environ['HOME'], '.swarm', 'config.json')
@@ -34,8 +33,7 @@ class SwarmApi(object):
                     elif name == 'current':
                         try:
                             current = data['current']
-                            print('{name}: {api}'.format(name=current,\
-                                                         api=data['apis'][current]))
+                            print('{name}: {api}'.format(name=current, api=data['apis'][current]))
                         except KeyError:
                             print('No swarm api in use')
                     elif name == 'all':
@@ -44,9 +42,8 @@ class SwarmApi(object):
                                                           api=data['apis'][name]))
                     else:
                         args = ','.join(data['apis'].keys() + ['current', 'all'])
-                        print('Error: `{name}` is unset. Available arguments: {args}'.format(\
-                                                                                    name=name,\
-                                                                                    args=args))
+                        print('Error: `{name}` is unset. Available arguments: {args}'.format(name=name,
+                                                                                             args=args))
             except IOError as e:
                 print(e)
             except OSError:
@@ -91,9 +88,8 @@ class SwarmApi(object):
                         }
                     else:
                         args = ','.join(data['apis'].keys() + ['current', 'all'])
-                        print('Error: `{name}` is unset. Available arguments: {args}'.format(\
-                                                                                    name=name,\
-                                                                                    args=args))
+                        print('Error: `{name}` is unset. Available arguments: {args}'.format(name=name,
+                                                                                             args=args))
                         return
                 with open(self._config, 'w') as fp:
                     fp.write(json.dumps(data, indent=4))
@@ -112,9 +108,8 @@ class SwarmApi(object):
                 else:
                     if data['apis'].keys():
                         args = ','.join(data['apis'].keys())
-                        print('Error: `{name}` not exist. Available arguments: {args}'.format(\
-                                                                                    name=name,\
-                                                                                    args=args))
+                        print('Error: `{name}` not exist. Available arguments: {args}'.format(name=name,
+                                                                                              args=args))
                     else:
                         print('No available swarm api')
                     return
@@ -135,11 +130,9 @@ class SwarmApi(object):
                     with open(self._config, 'w') as fp:
                         fp.write(json.dumps(data, indent=4))
                 else:
-                    print('Error: {version} is not numeric or greater than 1.10'.format(\
-                                                                            version=version))
+                    print('Error: {version} is not numeric or greater than 1.10'.format(version=version))
             except ValueError:
-                print('Error: {version} is not numeric or greater than 1.10'.format(\
-                                                                        version=version))
+                print('Error: {version} is not numeric or greater than 1.10'.format(version=version))
             except IOError as e:
                 print(e)
             except OSError:

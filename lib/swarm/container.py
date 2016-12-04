@@ -1,15 +1,17 @@
 # -*- coding: utf8 -*-
 
+from __future__ import print_function
+import six
 import dockerpty
+from sys import stdout
 from docker import errors
 from datetime import datetime
-from client import SwarmClient
-from utils import timeformat
+from swarm.client import SwarmClient
+from swarm.utils import timeformat
+
 
 class ContainerBase(object):
-    """
-    Containers Base Class
-    """
+
     def __init__(self):
         self.swarm = SwarmClient()
         self.containers = {}
@@ -53,21 +55,13 @@ class ContainerBase(object):
                 # handler container is container id is ok
                 try:
                     handlers[command](container_id, **kwargs)
-                except errors.NotFound as e:
-                    print(e.explanation)
-                    containers_err.add(container_id)
-                except errors.APIError as e:
-                    print(e.explanation)
-                    containers_err.add(container_id)
-                except errors.DockerException:
+                except (errors.NotFound, errors.APIError, errors.DockerException) as e:
                     print(e.explanation)
                     containers_err.add(container_id)
             cli.close()
-            return tuple((container_id for container_id in container_list\
-                                            if not container_id in containers_err))
+            return tuple((container_id for container_id in container_list if not container_id in containers_err))
 
-    def _get_containers(self, show_all=False, filters={}, limit=None, latest=None, since=None,\
-                                                                            container_list=None):
+    def _get_containers(self, show_all=False, filters={}, limit=None, latest=None, since=None, container_list=None):
         """
         :param show_all(bool): Show all containers. Only running containers are shown by default
         :param filters(dict): Filters to be processed on the image list
@@ -80,13 +74,7 @@ class ContainerBase(object):
         if cli is not None:
             try:
                 ret = cli.containers(all=show_all, filters=filters, latest=latest, since=since)
-            except errors.NotFound as e:
-                print(e.explanation)
-                return
-            except errors.APIError as e:
-                print(e.explanation)
-                return
-            except errors.DockerException:
+            except (errors.NotFound, errors.APIError, errors.DockerException) as e:
                 print(e.explanation)
                 return
             finally:
@@ -118,18 +106,16 @@ class ContainerBase(object):
                     # get the longest node/created/status field length for pretty print
                     self.node_length = len(node) if len(node) > self.node_length else self.node_length
                     self.image_length = len(container['Image']) if len(container['Image']) > self.image_length\
-                                                                        else self.image_length
+                                                                else self.image_length
                     if len(container['Command']) < self.command_length:
                         command = container['Command']
                     else:
                         command = container['Command'] if len(container['Command']) < self.max_command_length\
-                                                                    else container['Command'][:self.max_command_length]
+                                                       else container['Command'][:self.max_command_length]
                         self.command_length = len(container['Command']) if len(container['Command']) < self.max_command_length\
-                                                                    else self.max_command_length
-                    self.created_length = len(created) if len(created) > self.created_length\
-                                                                        else self.created_length
-                    self.status_length = len(container['Status']) if len(container['Status']) > self.status_length\
-                                                                        else self.status_length
+                                                                        else self.max_command_length
+                    self.created_length = len(created) if len(created) > self.created_length else self.created_length
+                    self.status_length = len(container['Status']) if len(container['Status']) > self.status_length else self.status_length
                      # (Id, Node, Image, Command, Created, Status, Names)
                     data = (container['Id'], node, container['Image'], command, created, container['Status'], name)
                     self.containers.setdefault(node, []).append(data)
@@ -145,13 +131,12 @@ class ContainerBase(object):
             s5 = ' ' * (self.created_length+blank-len('CREATED'))
             s6 = ' ' * (self.status_length+blank-len('STATUS'))
             title = '\
-CONTAINER ID{s1}NODE{s2}IMAGE{s3}COMMAND{s4}CREATED{s5}STATUS{s6}NAMES'.format(\
-                                                                        s1=s1,\
-                                                                        s2=s2,\
-                                                                        s3=s3,\
-                                                                        s4=s4,\
-                                                                        s5=s5,\
-                                                                        s6=s6)
+CONTAINER ID{s1}NODE{s2}IMAGE{s3}COMMAND{s4}CREATED{s5}STATUS{s6}NAMES'.format(s1=s1,
+                                                                               s2=s2,
+                                                                               s3=s3,
+                                                                               s4=s4,
+                                                                               s5=s5,
+                                                                               s6=s6)
             # pretty-print string defined by title
             string = ''
             for node in sorted(self.containers):
@@ -164,27 +149,25 @@ CONTAINER ID{s1}NODE{s2}IMAGE{s3}COMMAND{s4}CREATED{s5}STATUS{s6}NAMES'.format(\
                     s5 = ' ' * (self.created_length+blank-len(created))
                     s6 = ' ' * (self.status_length+blank-len(status))
                     string += '\
-{id}{s1}{node}{s2}{image}{s3}"{command}"{s4}{created}{s5}{status}{s6}{names}\n'.format(\
-                                                                            id=cid[:12],\
-                                                                            s1=s1,\
-                                                                            node=node,\
-                                                                            s2=s2,\
-                                                                            image=image,\
-                                                                            s3=s3,\
-                                                                            command=command,\
-                                                                            s4=s4,\
-                                                                            created=created,\
-                                                                            s5=s5,\
-                                                                            status=status,\
-                                                                            s6=s6,\
-                                                                            names=names)
+{id}{s1}{node}{s2}{image}{s3}"{command}"{s4}{created}{s5}{status}{s6}{names}\n'.format(id=cid[:12],
+                                                                                       s1=s1,
+                                                                                       node=node,
+                                                                                       s2=s2,
+                                                                                       image=image,
+                                                                                       s3=s3,
+                                                                                       command=command,
+                                                                                       s4=s4,
+                                                                                       created=created,
+                                                                                       s5=s5,
+                                                                                       status=status,
+                                                                                       s6=s6,
+                                                                                       names=names)
             # print pretty-print string
             print('{title}\n{string}'.format(title=title,string=string.rstrip()))
 
+
 class Containers(ContainerBase):
-    """
-    Similar to `docker ps`
-    """
+
     def __init__(self):
         super(Containers, self).__init__()
 
@@ -192,10 +175,9 @@ class Containers(ContainerBase):
         self._get_containers(**kwargs)
         self._pretty_print()
 
+
 class StartContainer(ContainerBase):
-    """
-    Similar to `docker start`
-    """
+
     def __init__(self):
         super(StartContainer, self).__init__()
 
@@ -209,10 +191,9 @@ class StartContainer(ContainerBase):
             self._get_containers(show_all=True, container_list=containers_start)
             self._pretty_print()
 
+
 class StopContainer(ContainerBase):
-    """
-    Similar to `docker stop`
-    """
+
     def __init__(self):
         super(StopContainer, self).__init__()
 
@@ -227,10 +208,9 @@ class StopContainer(ContainerBase):
             self._get_containers(filters={'status': 'exited'}, container_list=container_list)
             self._pretty_print()
 
+
 class RestartContainer(ContainerBase):
-    """
-    Similar to `docker restart`
-    """
+
     def __init__(self):
         super(RestartContainer, self).__init__()
 
@@ -245,10 +225,9 @@ class RestartContainer(ContainerBase):
             self._get_containers(show_all=True, container_list=containers_restart)
             self._pretty_print()
 
+
 class RemoveContainer(ContainerBase):
-    """
-    Similar to `docker rm`
-    """
+
     def __init__(self):
         super(RemoveContainer, self).__init__()
 
@@ -261,13 +240,11 @@ class RemoveContainer(ContainerBase):
         """
         containers_removed = self._handle_containers('remove', container_list, **kwargs)
         if containers_removed:
-            print('Succeed to remove container {containers}'.format(\
-                            containers=', '.join(containers_removed)))
+            print('Succeed to remove container {containers}'.format(containers=', '.join(containers_removed)))
+
 
 class CreateContainer(ContainerBase):
-    """
-    Similar to `docker run`
-    """
+
     def __init__(self):
         super(CreateContainer, self).__init__()
 
@@ -275,6 +252,7 @@ class CreateContainer(ContainerBase):
         cli = self.swarm.client
         if cli is not None:
             rm_flag = kwargs.pop('rm')
+            logs = kwargs.pop('logs')
             try:
                 ret = cli.create_container(*args, **kwargs)
                 if ret.get('Warnings') is not None:
@@ -282,7 +260,7 @@ class CreateContainer(ContainerBase):
                 # try to start created container
                 if ret.get('Id') is not None:
                     if kwargs['stdin_open'] and kwargs['tty']:
-                        dockerpty.start(cli, ret['Id'])
+                        dockerpty.start(cli, ret['Id'], logs=logs)
                     else:
                         cli.start(ret['Id'])
                         # try to get the latest container
@@ -296,11 +274,7 @@ class CreateContainer(ContainerBase):
                         self._pretty_print()                     
                     if rm_flag:
                         cli.remove_container(ret['Id'])
-            except errors.NotFound as e:
-                print(e.explanation)
-            except errors.APIError as e:
-                print(e.explanation)
-            except errors.DockerException as e:
+            except (errors.NotFound, errors.APIError, errors.DockerException) as e:
                 print(e.explanation)
             # volumes_from and dns arguments raise TypeError exception 
             # if they are used against v1.10 and above of the Docker remote API
@@ -309,10 +283,9 @@ class CreateContainer(ContainerBase):
             finally:
                 cli.close()
 
+
 class InspectContainer(ContainerBase):
-    """
-    Similar to `docker inspect`, but only for containers
-    """
+
     def __init__(self):
         super(InspectContainer, self).__init__()
 
@@ -326,19 +299,14 @@ class InspectContainer(ContainerBase):
             for container in container_list:
                 try:
                     ret.append(cli.inspect_container(container))
-                except errors.NotFound as e:
-                    print(e.explanation)
-                except errors.APIError as e:
-                    print(e.explanation)
-                except errors.DockerException as e:
-                    print(e.explanation)
+                except (errors.NotFound, errors.APIError, errors.DockerException):
+                    pass 
             cli.close()
             return ret if ret else None
 
+
 class Top(ContainerBase):
-    """
-    Similar to `docker top`
-    """
+
     def __init__(self):
         super(Top, self).__init__()
 
@@ -372,20 +340,15 @@ class Top(ContainerBase):
         if cli is not None:
             try:
                 self.ret = cli.top(container, ps_args)
-            except errors.NotFound as e:
-                print(e.explanation)
-            except errors.APIError as e:
-                print(e.explanation)
-            except errors.DockerException as e:
+            except (errors.NotFound, errors.APIError, errors.DockerException) as e:
                 print(e.explanation)
             finally:
                 cli.close()
             self._pretty_print()
 
+
 class Exec(ContainerBase):
-    """
-    Similar to `docker exec`
-    """
+
     def __init__(self):
         super(Exec, self).__init__()
 
@@ -402,27 +365,21 @@ class Exec(ContainerBase):
         if cli is not None:
             try:
                 if stdin and tty:
-                    ret = cli.exec_create(container, command, stdin=True, stdout=True,\
-                                                        stderr=True, tty=True, user=user)
-                    dockerpty.exec_start(cli, ret['Id'])
-                    #print('Not implement with `swarm exec -it`')
+                    ret = cli.exec_create(container, command, stdin=True, stdout=True,
+                                          stderr=True, tty=True, user=user)
+                    dockerpty.start_exec(cli, ret['Id'])
                 else:
                     ret = cli.exec_create(container, command, user=user)
                     for line in cli.exec_start(ret['Id'], detach=detach, stream=True):
                         print(line.strip())                     
-            except errors.NotFound as e:
-                print(e.explanation)
-            except errors.APIError as e:
-                print(e.explanation)
-            except errors.DockerException as e:
+            except (errors.NotFound, errors.APIError, errors.DockerException) as e:
                 print(e.explanation)
             finally:
                 cli.close()
 
+
 class Kill(ContainerBase):
-    """
-    Similar to `docker kill`
-    """
+
     def __init__(self):
         super(Kill, self).__init__()
 
@@ -436,3 +393,51 @@ class Kill(ContainerBase):
             # print container status
             self._get_containers(show_all=True, container_list=container_list)
             self._pretty_print()
+
+
+class Rename(ContainerBase):
+
+    def __init__(self):
+        super(Rename, self).__init__()
+
+    def __call__(self, container, name):
+        """
+        :param container(str): ID of the container to rename
+        :param name(str): New name for the container
+        """
+        cli = self.swarm.client
+        if cli is not None:
+            try:
+                cli.rename(container, name)
+            except (errors.NotFound, errors.APIError, errors.DockerException) as e:
+                print(e.explanation)
+            finally:
+                cli.close()
+
+
+class Logs(ContainerBase):
+
+    def __init__(self):
+        super(Logs, self).__init__()
+
+    def __call__(self, container, **kwargs):
+        """
+        :param container(str): The container to get logs from
+        :param timestamps(bool): Show timestamps
+        :param tail(str or int): Output specified number of lines at the end of logs: "all" or number
+        :param since(int): Show logs since a given datetime or integer epoch (in seconds)
+        :param follow(bool): Follow log output
+        """
+        cli = self.swarm.client
+        if cli is not None:
+            kwargs['stdout'] = kwargs['stderr'] = True
+            kwargs['stream'] = True
+            try:
+                for line in cli.logs(container, **kwargs):
+                    if six.PY3:
+                        line = line.decode('utf8')
+                    print(line, end='')
+            except (errors.NotFound, errors.APIError, errors.DockerException) as e:
+                print(e.explanation)
+            finally:
+                cli.close()

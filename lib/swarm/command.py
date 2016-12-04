@@ -6,12 +6,14 @@ import json
 import base64
 from docker import Client, errors
 from docker.auth import load_config
-from api import SwarmApi
-from utils import current_url_found, detect_range, expand_hostname_range
+from swarm.api import SwarmApi
+from swarm.utils import current_url_found, detect_range, expand_hostname_range
 from pprint import pprint
 from getpass import getpass
 
+
 class SwarmCommand(object):
+
     def __init__(self, args):
         self._config = SwarmApi().config
         self._args = args
@@ -30,6 +32,8 @@ class SwarmCommand(object):
             'top': self._swarm_top,
             'kill': self._swarm_kill,
             'inspect': self._swarm_inspect,
+            'rename': self._swarm_rename,
+            'logs': self._swarm_logs,
             'images': self._swarm_images,
             'rmi': self._swarm_rmi,
             'tag': self._swarm_tag,
@@ -98,8 +102,8 @@ class SwarmCommand(object):
         if self._args.username:
             username_input = self._args.username
             if conf.get(registry) is not None:
-                if username_input == conf[registry]['username'] and\
-                  self._args.password is None:
+                if username_input == conf[registry]['username']\
+                  and self._args.password is None:
                     password_input = conf[registry]['password']
         else:
             if conf.get(registry) is not None:
@@ -145,8 +149,7 @@ class SwarmCommand(object):
                             data = json.load(f)
                     else:
                         data = { 'auths': {} }
-                    auth = base64.b64encode('{user}:{passwd}'.format(user=username_input,\
-                                                                     passwd=password_input)).decode('ascii')
+                    auth = base64.b64encode('{user}:{passwd}'.format(user=username_input,passwd=password_input)).decode('ascii')
                     data['auths'][registry] = {
                         'auth': auth,
                         'email': email_input
@@ -219,9 +222,9 @@ class SwarmCommand(object):
                 links[name] = alias
         # handle log-driver options
         log_driver = self._args.log_driver
+        logs = 1  # keep backwards compatibility for dockerpty
         if log_driver == 'none':
-            print('--log-driver=none is not supported yet.')
-            exit(1)
+            logs = 0
         log_config = {
             'type': log_driver,
             'config': {}
@@ -250,8 +253,7 @@ class SwarmCommand(object):
                     hostIp, hostPort, containerPort = item.split(':')
                     port_bindings[containerPort] = (hostIp, hostPort) if hostPort else (hostIp,)
                 else:
-                    print('bad format for publish \
-(expected ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort')
+                    print('bad format for publish (expected ip:hostPort:containerPort | ip::containerPort | hostPort:containerPort | containerPort)')
                     exit(1)
                 if containerPort.find('/udp') > 0:
                     containerPort, protocol = containerPort.split('/')
@@ -270,8 +272,7 @@ class SwarmCommand(object):
                 elif item.count(':') == 2:
                     volumes.append(item.split(':')[1])
                 else:
-                    print('bad format of volume \
-(expected containerPath | hostPath:containerPath | hostPath:containerPath:[ro|rw]')
+                    print('bad format of volume (expected containerPath | hostPath:containerPath | hostPath:containerPath:[ro|rw])')
         # handle command
         _command = []
         if self._args.COMMAND is not None:
@@ -280,16 +281,16 @@ class SwarmCommand(object):
             _command.extend(self._args.ARG)
         command = _command if _command else None
         # create host config
-        host_config = Client().create_host_config(binds=self._args.volume,\
-                                                  port_bindings=port_bindings,\
-                                                  publish_all_ports=self._args.publish_all,\
-                                                  links=links,\
-                                                  privileged=self._args.privileged,\
-                                                  dns=dns,\
-                                                  volumes_from=self._args.volumes_from,\
-                                                  network_mode=self._args.net,\
-                                                  restart_policy={'Name': self._args.restart},\
-                                                  log_config=log_config,\
+        host_config = Client().create_host_config(binds=self._args.volume,
+                                                  port_bindings=port_bindings,
+                                                  publish_all_ports=self._args.publish_all,
+                                                  links=links,
+                                                  privileged=self._args.privileged,
+                                                  dns=dns,
+                                                  volumes_from=self._args.volumes_from,
+                                                  network_mode=self._args.net,
+                                                  restart_policy={'Name': self._args.restart},
+                                                  log_config=log_config,
                                                   mem_limit=self._args.memory)
         # build kwargs
         #print(host_config)
@@ -319,17 +320,18 @@ class SwarmCommand(object):
             'volume_driver': None,
             'stop_signal': None,
         }
-        self._args.func(image, command=kwargs['command'], hostname=kwargs['hostname'],\
-                        user=kwargs['user'],detach=kwargs['detach'],stdin_open=kwargs['stdin_open'],\
-                        tty=kwargs['tty'],rm=kwargs['rm'],mem_limit=None,ports=kwargs['ports'],\
-                        environment=kwargs['environment'],volumes=kwargs['volumes'],\
-                        volumes_from=None,network_disabled=kwargs['network_disabled'],\
-                        name=kwargs['name'],entrypoint=kwargs['entrypoint'],\
-                        cpu_shares=kwargs['cpu_shares'],working_dir=kwargs['working_dir'],\
-                        domainname=kwargs['domainname'],memswap_limit=kwargs['memswap_limit'],\
-                        cpuset=kwargs['cpuset'],host_config=kwargs['host_config'],\
-                        mac_address=kwargs['mac_address'],labels=kwargs['labels'],\
-                        volume_driver=kwargs['volume_driver'],stop_signal=kwargs['stop_signal'])
+        self._args.func(image, command=kwargs['command'], hostname=kwargs['hostname'],
+                        user=kwargs['user'],detach=kwargs['detach'],stdin_open=kwargs['stdin_open'],
+                        tty=kwargs['tty'],rm=kwargs['rm'],mem_limit=None,ports=kwargs['ports'],
+                        environment=kwargs['environment'],volumes=kwargs['volumes'],
+                        volumes_from=None,network_disabled=kwargs['network_disabled'],
+                        name=kwargs['name'],entrypoint=kwargs['entrypoint'],
+                        cpu_shares=kwargs['cpu_shares'],working_dir=kwargs['working_dir'],
+                        domainname=kwargs['domainname'],memswap_limit=kwargs['memswap_limit'],
+                        cpuset=kwargs['cpuset'],host_config=kwargs['host_config'],
+                        mac_address=kwargs['mac_address'],labels=kwargs['labels'],
+                        volume_driver=kwargs['volume_driver'],stop_signal=kwargs['stop_signal'],
+                        logs=logs)
 
     def _swarm_start(self):
         self._args.func(tuple(self._args.CONTAINER))
@@ -341,8 +343,7 @@ class SwarmCommand(object):
         self._args.func(tuple(self._args.CONTAINER), self._args.time)
 
     def _swarm_rm(self):
-        self._args.func(tuple(self._args.CONTAINER), v=self._args.volumes,\
-                                        force=self._args.force, link=self._args.link)
+        self._args.func(tuple(self._args.CONTAINER), v=self._args.volumes, force=self._args.force, link=self._args.link)
 
     def _swarm_exec(self):
         command = []
@@ -350,8 +351,7 @@ class SwarmCommand(object):
             command.append(self._args.COMMAND)
         if self._args.ARG is not None:
             command.extend(self._args.ARG)
-        self._args.func(self._args.CONTAINER, command, self._args.detach,\
-                                self._args.interactive, self._args.tty, self._args.user)
+        self._args.func(self._args.CONTAINER, command, self._args.detach, self._args.interactive, self._args.tty, self._args.user)
 
     def _swarm_top(self):
         self._args.func(self._args.CONTAINER, self._args.ps_args)
@@ -372,12 +372,24 @@ class SwarmCommand(object):
         else:
         # print both otherwise
             ret = []
-            for data in (self._args.inspect_container(self._args.OBJECT),\
-                            self._args.inspect_image(self._args.OBJECT)):
+            for data in (self._args.inspect_container(self._args.OBJECT), self._args.inspect_image(self._args.OBJECT)):
                 if data is not None:
                     ret.extend(data)
             if ret:
                 pprint(ret)
+
+    def _swarm_rename(self):
+        self._args.func(self._args.CONTAINER, self._args.NAME)
+
+    def _swarm_logs(self):
+        tail = 'all'
+        if self._args.tail is not None:
+            try:
+                tail = int(self._args.tail)
+            except ValueError:
+                tail = 'all'
+        self._args.func(self._args.CONTAINER, timestamps=self._args.timestamp,
+                        tail=tail, since=self._args.since, follow=self._args.follow)
 
     def _swarm_images(self):
         filters = {}
@@ -425,8 +437,7 @@ class SwarmCommand(object):
                 'username': username,
                 'password': password
             }
-        self._args.func(repo, tag=tag, insecure_registry=self._args.insecure,\
-                                                        auth_config=auth_config)
+        self._args.func(repo, tag=tag, insecure_registry=self._args.insecure, auth_config=auth_config)
 
     def _swarm_push(self):
         repo_name = self._args.REPOTAG.split(':', 1)
@@ -467,7 +478,7 @@ class SwarmCommand(object):
                 else:
                     print('bad format for buildargs (expected name=value)')
                     exit(1)
-        self._args.func(path=self._args.PATH, tag=self._args.tag, quiet=self._args.quiet,\
-                        nocache=self._args.no_cache, rm=self._args.rm, pull=self._args.pull,\
-                        forcerm=self._args.force_rm, dockerfile=self._args.file,\
+        self._args.func(path=self._args.PATH, tag=self._args.tag, quiet=self._args.quiet,
+                        nocache=self._args.no_cache, rm=self._args.rm, pull=self._args.pull,
+                        forcerm=self._args.force_rm, dockerfile=self._args.file,
                         container_limits=container_limits, decode=True, buildargs=buildargs)
