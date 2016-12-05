@@ -1,5 +1,6 @@
 # -*- coding: utf8 -*-
 
+from __future__ import print_function
 import os
 import requests
 import json
@@ -8,7 +9,7 @@ from docker import Client, errors
 from docker.auth import load_config
 from swarm.api import SwarmApi
 from swarm.utils import current_url_found, detect_range, expand_hostname_range
-from pprint import pprint
+#from pprint import pprint
 from getpass import getpass
 
 
@@ -368,7 +369,7 @@ class SwarmCommand(object):
             elif self._args.type == 'image':
                 ret = self._args.inspect_image(self._args.OBJECT)
             if ret is not None:
-                pprint(ret)
+                print(ret)
         else:
         # print both otherwise
             ret = []
@@ -376,7 +377,7 @@ class SwarmCommand(object):
                 if data is not None:
                     ret.extend(data)
             if ret:
-                pprint(ret)
+                print(ret)
 
     def _swarm_rename(self):
         self._args.func(self._args.CONTAINER, self._args.NAME)

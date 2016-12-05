@@ -1,8 +1,10 @@
 # -*- coding: utf8 -*-
 
+from __future__ import print_function
 import json
 from docker import Client, errors
 from swarm.api import SwarmApi
+from swarm.utils import pyprint
 
 
 class SwarmClient(object):
@@ -38,7 +40,7 @@ class SwarmClient(object):
             except KeyError:
                 return
         except IOError as e:
-            print(e)
+            pyprint(e)
             return
         except OSError:
             raise
@@ -56,7 +58,7 @@ class SwarmClient(object):
                     return Client(base_url, version=self.version, timeout=600)
                 return
             except errors.DockerException as e:
-                print(e)
+                pyprint(e)
                 return
         print('No available swarm api')
         return

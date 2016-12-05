@@ -5,7 +5,7 @@ from sys import stdout
 from docker import errors
 from datetime import datetime
 from swarm.client import SwarmClient
-from swarm.utils import timeformat, byteformat
+from swarm.utils import timeformat, byteformat, pyprint
 
 
 class Images(object):
@@ -29,7 +29,7 @@ class Images(object):
             try:
                 ret = cli.images(name=name,all=show_all,filters=filters)
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
                 return
             finally:
                 cli.close()
@@ -113,7 +113,7 @@ class RemoveImage(Images):
                 try:
                     cli.remove_image(image)
                 except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                    print(e.explanation)
+                    pyprint(e.explanation)
                     images_err.add(image)
             cli.close()
             # exclude images in image_error
@@ -140,7 +140,7 @@ class Tag(Images):
             try:
                 ret = cli.tag(*args, **kwargs)
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             finally:
                 cli.close()
             if ret is not None:
@@ -198,7 +198,7 @@ auth_config should contain the username and password keys to be valid
                     elif line.get('error') is not None:
                         print(line['error'])
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             finally:
                 cli.close()
 
@@ -221,6 +221,7 @@ class Push(Images):
             print('{status} {progress}'.format(status=msg['status'],progress=progress), end=endl)
         else:
             print('{status}{endl}'.format(status=msg['status'],endl=endl))
+        stdout.flush() # flush stdout otherwise display may be broken
 
     def _display_JSONMessages(self, stream):
         ids = {}  # map[string]int
@@ -258,7 +259,7 @@ class Push(Images):
             try:
                 self._display_JSONMessages(cli.push(*args, **kwargs))
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             finally:
                 cli.close()
 
@@ -279,8 +280,8 @@ class Build(Images):
                         print(line['error'])
                     stdout.flush()
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             except TypeError as e:
-                print(e)
+                pyprint(e)
             finally:
                 cli.close()

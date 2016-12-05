@@ -1,5 +1,6 @@
 # -*- coding: utf8 -*-
 
+from __future__ import print_function
 import os
 import json
 
@@ -43,7 +44,7 @@ class SwarmApi(object):
                     else:
                         args = ','.join(data['apis'].keys() + ['current', 'all'])
                         print('Error: `{name}` is unset. Available arguments: {args}'.format(name=name,
-                                                                                             args=args))
+                                                                                               args=args))
             except IOError as e:
                 print(e)
             except OSError:
@@ -89,7 +90,7 @@ class SwarmApi(object):
                     else:
                         args = ','.join(data['apis'].keys() + ['current', 'all'])
                         print('Error: `{name}` is unset. Available arguments: {args}'.format(name=name,
-                                                                                             args=args))
+                                                                                               args=args))
                         return
                 with open(self._config, 'w') as fp:
                     fp.write(json.dumps(data, indent=4))
@@ -109,7 +110,7 @@ class SwarmApi(object):
                     if data['apis'].keys():
                         args = ','.join(data['apis'].keys())
                         print('Error: `{name}` not exist. Available arguments: {args}'.format(name=name,
-                                                                                              args=args))
+                                                                                                args=args))
                     else:
                         print('No available swarm api')
                     return

@@ -3,11 +3,11 @@
 from __future__ import print_function
 import six
 import dockerpty
-from sys import stdout
 from docker import errors
 from datetime import datetime
+from fnmatch import fnmatch
 from swarm.client import SwarmClient
-from swarm.utils import timeformat
+from swarm.utils import timeformat, pyprint
 
 
 class ContainerBase(object):
@@ -21,12 +21,26 @@ class ContainerBase(object):
         self.created_length = len('CREATED')
         self.status_length = len('STATUS')
         self.max_command_length = 20
+        self.max_id_length = 12
+
+    def _handle_wildcard(self, pattern):
+        names = []
+        cli = self.swarm.client
+        if cli is not None:
+            containers = cli.containers(all=True)
+            containers_name = tuple((name.split('/')[2] for container in containers
+                                                        for name in container['Names']
+                                                        if name.count('/') == 2))
+            for name in containers_name:
+                if fnmatch(name, pattern):
+                    names.append(name)
+        return names
 
     def _handle_containers(self, command, container_list, **kwargs):
         """
         :param command(str): must be one of ['start', 'stop', 'restart', 'remove', 'kill']
-        :container_list(list): list containes container ids
-        :kwargs: optional keyword arguments
+        :param container_list(list): list containes container ids or names
+        :param kwargs: optional keyword arguments
         """
         cli = self.swarm.client
         if cli is not None:
@@ -39,27 +53,23 @@ class ContainerBase(object):
             }
             if not command in handlers:
                 return
-            containers_id = tuple((container['Id'] for container in cli.containers(all=True)))
             containers_err = set()
-            for container_id in container_list:
-                # try find container_id in the containers_id:
-                matched = False
-                for full_container_id in containers_id:
-                    if full_container_id.startswith(container_id):
-                        matched = True
-                        break
-                if not matched:
-                    print('Container ID `{container_id}` is missing'.format(container_id=container_id))
-                    containers_err.add(container_id)
-                    continue
-                # handler container is container id is ok
+            containers_filter = set()
+            for container in container_list:
                 try:
-                    handlers[command](container_id, **kwargs)
+                    if container.count('*') > 0: # handle container name contains '*'
+                        names = self._handle_wildcard(container)
+                        for name in names:
+                            handlers[command](name, **kwargs)
+                            containers_filter.add(name)
+                    else:
+                        handlers[command](container, **kwargs)
+                        containers_filter.add(container)
                 except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                    print(e.explanation)
-                    containers_err.add(container_id)
+                    pyprint(e.explanation)
+                    containers_err.add(container)
             cli.close()
-            return tuple((container_id for container_id in container_list if not container_id in containers_err))
+            return tuple((container for container in containers_filter if not container in containers_err))
 
     def _get_containers(self, show_all=False, filters={}, limit=None, latest=None, since=None, container_list=None):
         """
@@ -68,14 +78,14 @@ class ContainerBase(object):
         :parma limit(tuple or list): Filter containers by node name or node pattern
         :param latest(bool): Show only the latest created container, include non-running ones
         :param since(str): Show only containers created since Id or Name, include non-running ones
-        :param container_list(list): List containes container ids
+        :param container_list(list): List containes container ids or names 
         """
         cli = self.swarm.client
         if cli is not None:
             try:
                 ret = cli.containers(all=show_all, filters=filters, latest=latest, since=since)
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
                 return
             finally:
                 cli.close()
@@ -149,7 +159,7 @@ CONTAINER ID{s1}NODE{s2}IMAGE{s3}COMMAND{s4}CREATED{s5}STATUS{s6}NAMES'.format(s
                     s5 = ' ' * (self.created_length+blank-len(created))
                     s6 = ' ' * (self.status_length+blank-len(status))
                     string += '\
-{id}{s1}{node}{s2}{image}{s3}"{command}"{s4}{created}{s5}{status}{s6}{names}\n'.format(id=cid[:12],
+{id}{s1}{node}{s2}{image}{s3}"{command}"{s4}{created}{s5}{status}{s6}{names}\n'.format(id=cid[:self.max_id_length],
                                                                                        s1=s1,
                                                                                        node=node,
                                                                                        s2=s2,
@@ -185,11 +195,9 @@ class StartContainer(ContainerBase):
         """
         :param container_list(list): List of container ids
         """
-        containers_start = self._handle_containers('start', container_list)
-        if containers_start is not None:
-            # print container status
-            self._get_containers(show_all=True, container_list=containers_start)
-            self._pretty_print()
+        containers_started = self._handle_containers('start', container_list)
+        if containers_started:
+            print('\n'.join(containers_started))
 
 
 class StopContainer(ContainerBase):
@@ -202,11 +210,9 @@ class StopContainer(ContainerBase):
         :param container_list(list): List of container ids
         :param timeout(int): Timeout in seconds to wait for the container to stop before sending a SIGKIL
         """
-        containers_stop = self._handle_containers('stop', container_list, timeout=timeout)
-        if containers_stop is not None:
-            # print container status
-            self._get_containers(filters={'status': 'exited'}, container_list=container_list)
-            self._pretty_print()
+        containers_stopped = self._handle_containers('stop', container_list, timeout=timeout)
+        if containers_stopped:
+            print('\n'.join(containers_stopped))
 
 
 class RestartContainer(ContainerBase):
@@ -219,11 +225,9 @@ class RestartContainer(ContainerBase):
         :param container_list(list): List of container ids
         :param timeout(int): Timeout in seconds to wait for the container to stop before sending a SIGKIL
         """
-        containers_restart = self._handle_containers('restart', container_list, timeout=timeout)
-        if containers_restart is not None:
-            # print container status
-            self._get_containers(show_all=True, container_list=containers_restart)
-            self._pretty_print()
+        containers_restarted = self._handle_containers('restart', container_list, timeout=timeout)
+        if containers_restarted:
+            print('\n'.join(containers_restarted))
 
 
 class RemoveContainer(ContainerBase):
@@ -240,7 +244,7 @@ class RemoveContainer(ContainerBase):
         """
         containers_removed = self._handle_containers('remove', container_list, **kwargs)
         if containers_removed:
-            print('Succeed to remove container {containers}'.format(containers=', '.join(containers_removed)))
+            print('\n'.join(containers_removed))
 
 
 class CreateContainer(ContainerBase):
@@ -263,23 +267,16 @@ class CreateContainer(ContainerBase):
                         dockerpty.start(cli, ret['Id'], logs=logs)
                     else:
                         cli.start(ret['Id'])
-                        # try to get the latest container
-                        # check if container id is matched
-                        # otherwise search containers since=self.container['Id']
-                        latest_container = cli.containers(latest=True)[0]
-                        if ret['Id'] == latest_container['Id']:
-                            self._get_containers(latest=True)
-                        else:
-                            self._get_containers(since=ret['Id'], container_list=(ret['Id'],))
-                        self._pretty_print()                     
+                        print(ret['Id'])
                     if rm_flag:
                         cli.remove_container(ret['Id'])
+                        print(ret['Id'])
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             # volumes_from and dns arguments raise TypeError exception 
             # if they are used against v1.10 and above of the Docker remote API
             except TypeError as e:
-                print(e)
+                pyprint(e)
             finally:
                 cli.close()
 
@@ -341,7 +338,7 @@ class Top(ContainerBase):
             try:
                 self.ret = cli.top(container, ps_args)
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             finally:
                 cli.close()
             self._pretty_print()
@@ -373,7 +370,7 @@ class Exec(ContainerBase):
                     for line in cli.exec_start(ret['Id'], detach=detach, stream=True):
                         print(line.strip())                     
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             finally:
                 cli.close()
 
@@ -388,11 +385,9 @@ class Kill(ContainerBase):
         :param container(str): The container id to kill
         :param signal(str or int):  The signal to send. Defaults to SIGKILL
         """
-        containers_kill = self._handle_containers('kill', container_list, signal=signal)
-        if containers_kill is not None:
-            # print container status
-            self._get_containers(show_all=True, container_list=container_list)
-            self._pretty_print()
+        containers_killed = self._handle_containers('kill', container_list, signal=signal)
+        if containers_killed:
+            print('\n'.join(containers_killed))
 
 
 class Rename(ContainerBase):
@@ -410,7 +405,7 @@ class Rename(ContainerBase):
             try:
                 cli.rename(container, name)
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             finally:
                 cli.close()
 
@@ -438,6 +433,6 @@ class Logs(ContainerBase):
                         line = line.decode('utf8')
                     print(line, end='')
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                print(e.explanation)
+                pyprint(e.explanation)
             finally:
                 cli.close()

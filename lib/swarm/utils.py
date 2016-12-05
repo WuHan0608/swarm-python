@@ -1,7 +1,17 @@
 # -*- coding: utf8 -*-
 
+from __future__ import print_function
+import six
 import json
 import string
+
+
+def pyprint(data, decode='utf8', **kwargs):
+    if six.PY3:
+        if isinstance(data, bytes):
+            print(data.decode(decode), **kwargs)
+            return
+    print(data, **kwargs)
 
 
 def byteformat(size, base=1024, unit='B'):
