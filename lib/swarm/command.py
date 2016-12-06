@@ -8,16 +8,16 @@ import base64
 from docker import Client, errors
 from docker.auth import load_config
 from swarm.api import SwarmApi
-from swarm.utils import current_url_found, detect_range, expand_hostname_range
+from swarm.utils import is_api_inuse, detect_range, expand_hostname_range
 #from pprint import pprint
 from getpass import getpass
 
 
 class SwarmCommand(object):
 
-    def __init__(self, args):
+    def __init__(self, parser):
         self._config = SwarmApi().config
-        self._args = args
+        self._args = parser.parse_args()
         self._commands = {
             'api': self._swarm_api,
             'version': self._swarm_version,
@@ -41,6 +41,7 @@ class SwarmCommand(object):
             'pull': self._swarm_pull,
             'push': self._swarm_push,
             'build': self._swarm_build,
+            'search': self._swarm_search,
         }
 
     def __call__(self):
@@ -61,29 +62,34 @@ class SwarmCommand(object):
 
     def _swarm_api(self):
         notice = '[Notice] No swarm api in use'
-        if self._args.command == 'get':
-            if not current_url_found(self._config):
-                print(notice)
-            for name in self._args.argument:
-                self._args.func.get_api(name)
-        elif self._args.command == 'set':
-            if not current_url_found(self._config):
-                print(notice)
-            for item in self._args.argument:
-                if item.count('=') == 1:
-                    name, api = item.split('=')
-                    self._args.func.update_api(name, api)
-                else:
-                    print('bad format for api (expected name=value)')
-        elif self._args.command == 'unset':
-            if not current_url_found(self._config):
-                print(notice)
-            for name in self._args.argument:
-                self._args.func.remove_api(name)
-        elif self._args.command == 'version':
-            self._args.func.use_version(self._args.argument[0])
-        elif self._args.command == 'use':
-            self._args.func.use_api(self._args.argument[0])
+        if self._args.argument:
+            if self._args.command == 'set':
+                if not is_api_inuse(self._config):
+                    print('\033[33m{notice}\033[0m'.format(notice=notice))
+                for item in self._args.argument:
+                    if item.count('=') == 1:
+                        name, api = item.split('=')
+                        self._args.func.add_api(name, api)
+                    else:
+                        print('bad format for api (expected name=value)')
+                        exit(1)
+            elif self._args.command == 'unset':
+                if not is_api_inuse(self._config):
+                    print('\033[33m{notice}\033[0m'.format(notice=notice))
+                for name in self._args.argument:
+                    self._args.func.unset_api(name)
+            elif self._args.command == 'version':
+                self._args.func.set_version(self._args.argument[0])
+            elif self._args.command == 'use':
+                self._args.func.set_api(self._args.argument[0])
+        else:
+            if self._args.command == 'list':
+                if not is_api_inuse(self._config):
+                    print('\033[33m{notice}\033[0m'.format(notice=notice))
+                self._args.func.list_api()
+            else:
+                print('Issue `swarm api -h` for help.')
+                exit(1)
 
     def _swarm_version(self):
         self._args.func()
@@ -483,3 +489,6 @@ class SwarmCommand(object):
                         nocache=self._args.no_cache, rm=self._args.rm, pull=self._args.pull,
                         forcerm=self._args.force_rm, dockerfile=self._args.file,
                         container_limits=container_limits, decode=True, buildargs=buildargs)
+
+    def _swarm_search(self):
+        self._args.func(self._args.TERM, automated=self._args.automated, no_trunc=self._args.no_trunc, stars=self._args.stars)

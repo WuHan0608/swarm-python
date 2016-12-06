@@ -68,11 +68,7 @@ class Images(object):
             s2 = ' ' * (self.tag_length+blank-len('TAG'))
             s3 = ' ' * (blank+4)
             s4 = ' ' * (self.created_length+blank-len('CREATED'))
-            title = 'REPOSITORY{s1}TAG{s2}IMAGE ID{s3}CREATED{s4}VIRTUAL SIZE'.format(s1=s1,
-                                                                                      s2=s2,
-                                                                                      s3=s3,
-                                                                                      s4=s4)
-            # pretty-print string defined by title
+            title = 'REPOSITORY{s1}TAG{s2}IMAGE ID{s3}CREATED{s4}VIRTUAL SIZE'.format(s1=s1,s2=s2,s3=s3,s4=s4)
             string = ''
             for node in self.images:
                 repo, tag, image_id, created, virtual_size = node
@@ -283,5 +279,72 @@ class Build(Images):
                 pyprint(e.explanation)
             except TypeError as e:
                 pyprint(e)
+            finally:
+                cli.close()
+
+
+class Search(Images):
+
+    def __init__(self):
+        super(Search, self).__init__()
+        self.images_filter = []
+
+    def _pretty_print(self):
+        if self.images_filter:
+            max_name = max(tuple((image['name'] for image in self.images_filter)), key=len)
+            max_desc = max(tuple((image['description'] for image in self.images_filter)), key=len)
+            max_stars = max(tuple((str(image['star_count']) for image in self.images_filter)), key=len)
+            max_name_len = len(max_name) if len(max_name) > len('NAME') else len('NAME')
+            max_desc_len = len(max_desc) if len(max_desc) > len('DESCRIPTION') else len('DESCRIPTION')
+            max_stars_len = len(max_stars) if len(max_stars) > len('STARS') else len('STARS')
+            blank = 4
+            # title: NAME DESCRIPTION STARS OFFICIAL AUTOMATED
+            s1 = ' ' * (max_name_len+blank-len('NAME'))
+            s2 = ' ' * (max_desc_len+blank-len('DESCRIPTION'))
+            s3 = ' ' * (max_stars_len+blank-len('STARS'))
+            s4 = ' ' * (blank)
+            title = 'NAME{s1}DESCRIPTION{s2}STARS{s3}OFFICIAL{s4}AUTOMATED'.format(s1=s1,s2=s2,s3=s3,s4=s4)
+            string = ''
+            for image in self.images_filter:
+                name, desc, stars, is_official, is_automated = image['name'], image['description'],\
+                                                               image['star_count'], image['is_official'],\
+                                                               image['is_automated']
+                official = '[OK]' if is_official else ''
+                automated = '[OK]' if is_automated else ''
+                s1 = ' ' * (max_name_len+blank-len(name))
+                s2 = ' ' * (max_desc_len+blank-len(desc))
+                s3 = ' ' * (max_stars_len+blank-len(str(stars)))
+                s4 = ' ' * (len('OFFICIAL')+blank-len(official))
+                string += '{name}{s1}{desc}{s2}{stars}{s3}{official}{s4}{automated}\n'.format(name=name,
+                                                                                              s1=s1,
+                                                                                              desc=desc,
+                                                                                              s2=s2,
+                                                                                              stars=stars,
+                                                                                              s3=s3,
+                                                                                              official=official,
+                                                                                              s4=s4,
+                                                                                              automated=automated)
+            # print pretty-print string
+            print('{title}\n{string}'.format(title=title,string=string.rstrip()))
+
+    def __call__(self, term, **kwargs):
+        cli = self.swarm.client
+        if cli is not None:
+            try:
+                response = cli.search(term)
+                for image in response:
+                    if kwargs.get('automated', False):
+                        if not image['is_automated']:
+                            continue
+                    if kwargs.get('stars', 0) > 0:
+                        if image['star_count'] < kwargs['stars']:
+                            continue
+                    if not kwargs.get('no_trunc', False):
+                        if image['description'] >= 45: 
+                            image['description'] = image['description'][:42] + '...'
+                    self.images_filter.append(image)
+                self._pretty_print()
+            except (errors.NotFound, errors.APIError, errors.DockerException) as e:
+                pyprint(e.explanation)
             finally:
                 cli.close()

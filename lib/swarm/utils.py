@@ -48,7 +48,7 @@ def base_url_found(config):
         return False
 
 
-def current_url_found(config):
+def is_api_inuse(config):
     try:
         with open(config, 'r') as fp:
             data = json.load(fp)

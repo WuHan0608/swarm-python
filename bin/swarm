@@ -3,9 +3,11 @@
 
 from swarm import SwarmArgumentParser, SwarmCommand
 
+
 def main():
-    command = SwarmCommand(SwarmArgumentParser().parse_args())
+    command = SwarmCommand(SwarmArgumentParser())
     command()
+
 
 if __name__ == '__main__':
     main()

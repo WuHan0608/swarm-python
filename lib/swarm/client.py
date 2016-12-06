@@ -66,4 +66,3 @@ class SwarmClient(object):
     @property
     def version(self):
         return self._get_version()
-    

@@ -6,7 +6,7 @@ from swarm.daemon import Version, Info, Login
 from swarm.container import Containers, StartContainer, StopContainer, RestartContainer,\
                             RemoveContainer, CreateContainer, InspectContainer, Top, Exec,\
                             Kill, Rename, Logs
-from swarm.image import Images, RemoveImage, Tag, InspectImage, Pull, Push, Build
+from swarm.image import Images, RemoveImage, Tag, InspectImage, Pull, Push, Build, Search
 from swarm.utils import base_url_found
 
 
@@ -39,9 +39,10 @@ class SwarmArgumentParser(object):
             'pull': 'swarm pull [OPTIONS] NAME[:TAG]',
             'push': 'swarm push [OPTIONS] NAME[:TAG]',
             'build': 'swarm build [OPTIONS] PATH | URL | -',
+            'search': 'swarm search [OPTIONS] TERM',
         }
         self._help = {
-            'api': 'Config Swarm API, otherwise no further command is available',
+            'api': 'Set swarm api to enable other comamnds',
             'version': 'Show the Docker version information.',
             'info': 'Display system-wide information',
             'login': 'Register or log in to a Docker registry server, if no server is specified "https://index.docker.io/v1/" is the default.',
@@ -63,6 +64,7 @@ class SwarmArgumentParser(object):
             'pull': 'Pull an image or a repository from a registry',
             'push': 'Push an image or a repository to a registry',
             'build': 'Build a new image from the source code at PATH',
+            'search': 'Search the Docker Hub for images',
         }
 
     def parse_args(self):
@@ -89,10 +91,11 @@ class SwarmArgumentParser(object):
             self._add_parser_pull()
             self._add_parser_push()
             self._add_parser_build()
+            self._add_parser_search()
         return self._parser.parse_args()
 
     def _add_parser_api(self):
-        choices = ('get', 'set', 'unset', 'use', 'version')
+        choices = ('list', 'set', 'unset', 'use', 'version')
         parser_api = self._subparsers.add_parser('api', description=self._help['api'],
                                                         help=self._help['api'],
                                                         usage=self._usage['api'],
@@ -100,14 +103,14 @@ class SwarmArgumentParser(object):
         parser_api.add_argument('command', choices=choices,
                                            metavar='COMMAND',
                                            help='Available comamnd: {commands}'.format(commands=', '.join(choices)))
-        parser_api.add_argument('argument', nargs='+', 
+        parser_api.add_argument('argument', nargs='*', 
                                             metavar='ARG',
                                             help='''\
 format:
-set [ name1=tcp://ip:port name2=tcp://ip:port ... ]
-get [ name1 name2 ... | all | current ]
-unset [ name1 name2 ... | all | current ]
-use name1
+list
+set [ api1=tcp://ip:port api2=tcp://ip:port ... ]
+unset [ api1 api2 ... | all ]
+use api1
 version [ x.xx | auto ]''')
         parser_api.set_defaults(func=SwarmApi())
         parser_api.set_defaults(cmd='api')
@@ -379,3 +382,14 @@ Use \'[-f|--filter] node=<nodename>\' to show images of the specific node''')
         parser_build.add_argument('PATH', type=str, metavar='PATH | URL | -')
         parser_build.set_defaults(func=Build())
         parser_build.set_defaults(cmd='build')
+
+    def _add_parser_search(self):
+        parser_search = self._subparsers.add_parser('search', description=self._help['search'],
+                                                              help=self._help['search'],
+                                                              usage=self._usage['search'])
+        parser_search.add_argument('TERM', type=str)
+        parser_search.add_argument('--automated', action='store_true', help='Only show automated builds')
+        parser_search.add_argument('--no-trunc', action='store_true', help='Don\'t truncate output')
+        parser_search.add_argument('-s', '--stars', type=int, help='Only displays with at least x stars')
+        parser_search.set_defaults(func=Search())
+        parser_search.set_defaults(cmd='search')
