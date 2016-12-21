@@ -70,7 +70,7 @@ Name: {Name}\
 Containers=ret['Containers'],
 Images=ret['Images'],
 SystemStatus='\n'.join([': '.join((item[0].encode('utf8'), item[1].encode('utf8')))\
-                                                          for item in SystemStatus]),
+                                                          for item in systemstatus]),
 NCPU=ret['NCPU'],
 MemTotal=byteformat(ret['MemTotal']),
 Name=ret['Name'])

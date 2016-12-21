@@ -36,7 +36,7 @@ class ContainerBase(object):
                     names.append(name)
         return names
 
-    def _handle_containers(self, command, container_list, **kwargs):
+    def _handle_containers(self, command, container, **kwargs):
         """
         :param command(str): must be one of ['start', 'stop', 'restart', 'remove', 'kill']
         :param container_list(list): list containes container ids or names
@@ -51,34 +51,26 @@ class ContainerBase(object):
                 'remove': cli.remove_container,
                 'kill': cli.kill
             }
-            if not command in handlers:
-                return
-            containers_err = set()
-            containers_filter = set()
-            for container in container_list:
-                try:
-                    if container.count('*') > 0: # handle container name contains '*'
-                        names = self._handle_wildcard(container)
-                        for name in names:
-                            handlers[command](name, **kwargs)
-                            containers_filter.add(name)
-                    else:
-                        handlers[command](container, **kwargs)
-                        containers_filter.add(container)
-                except (errors.NotFound, errors.APIError, errors.DockerException) as e:
-                    pyprint(e.explanation)
-                    containers_err.add(container)
-            cli.close()
-            return tuple((container for container in containers_filter if not container in containers_err))
+            try:
+                handlers[command](container, **kwargs)
+            except (errors.NotFound, errors.APIError, errors.DockerException) as e:
+                pyprint(e.explanation)
+            finally:
+                cli.close()
 
-    def _get_containers(self, show_all=False, filters={}, limit=None, latest=None, since=None, container_list=None):
+
+class Containers(ContainerBase):
+
+    def __init__(self):
+        super(Containers, self).__init__()
+
+    def _get_containers(self, show_all=False, filters={}, limit=None, latest=None, since=None):
         """
         :param show_all(bool): Show all containers. Only running containers are shown by default
         :param filters(dict): Filters to be processed on the image list
         :parma limit(tuple or list): Filter containers by node name or node pattern
         :param latest(bool): Show only the latest created container, include non-running ones
-        :param since(str): Show only containers created since Id or Name, include non-running ones
-        :param container_list(list): List containes container ids or names 
+        :param since(str): Show only containers created since Id or Name, include non-running containers
         """
         cli = self.swarm.client
         if cli is not None:
@@ -91,11 +83,6 @@ class ContainerBase(object):
                 cli.close()
             if ret:
                 for container in ret:
-                    # if container_list provide, then get containers against it
-                    # name and id are both allowed for query from api version '1.20'
-                    if container_list is not None:
-                        if not container['Id'].startswith(container_list):
-                            continue
                     # if limit is provide, then get containers against it
                     node = container['Names'][0].split('/', 2)[1]
                     if limit is not None:
@@ -175,12 +162,6 @@ CONTAINER ID{s1}NODE{s2}IMAGE{s3}COMMAND{s4}CREATED{s5}STATUS{s6}NAMES'.format(s
             # print pretty-print string
             print('{title}\n{string}'.format(title=title,string=string.rstrip()))
 
-
-class Containers(ContainerBase):
-
-    def __init__(self):
-        super(Containers, self).__init__()
-
     def __call__(self, **kwargs):
         self._get_containers(**kwargs)
         self._pretty_print()
@@ -193,11 +174,17 @@ class StartContainer(ContainerBase):
 
     def __call__(self, container_list):
         """
-        :param container_list(list): List of container ids
+        :param container_list(list): List of container id or name
         """
-        containers_started = self._handle_containers('start', container_list)
-        if containers_started:
-            print('\n'.join(containers_started))
+        for container in container_list:
+            if container.count('*') > 0: # wildcard name
+                containers = self._handle_wildcard(container)
+                for _container in containers:
+                    self._handle_containers('start', _container)
+                    print(_container)
+            else:
+                self._handle_containers('start', container)
+                print(container)
 
 
 class StopContainer(ContainerBase):
@@ -207,12 +194,18 @@ class StopContainer(ContainerBase):
 
     def __call__(self, container_list, timeout):
         """
-        :param container_list(list): List of container ids
+        :param container_list(list): List of container id or name
         :param timeout(int): Timeout in seconds to wait for the container to stop before sending a SIGKIL
         """
-        containers_stopped = self._handle_containers('stop', container_list, timeout=timeout)
-        if containers_stopped:
-            print('\n'.join(containers_stopped))
+        for container in container_list:
+            if container.count('*') > 0: # wildcard name
+                containers = self._handle_wildcard(container)
+                for _container in containers:
+                    self._handle_containers('stop', _container, timeout=timeout)
+                    print(_container)
+            else:
+                self._handle_containers('stop', container, timeout=timeout)
+                print(container)
 
 
 class RestartContainer(ContainerBase):
@@ -222,12 +215,18 @@ class RestartContainer(ContainerBase):
 
     def __call__(self, container_list, timeout=10):
         """
-        :param container_list(list): List of container ids
+        :param container_list(list): List of container id or name
         :param timeout(int): Timeout in seconds to wait for the container to stop before sending a SIGKIL
         """
-        containers_restarted = self._handle_containers('restart', container_list, timeout=timeout)
-        if containers_restarted:
-            print('\n'.join(containers_restarted))
+        for container in container_list:
+            if container.count('*') > 0: # wildcard name
+                containers = self._handle_wildcard(container)
+                for _container in containers:
+                    self._handle_containers('restart', _container, timeout=timeout)
+                    print(_container)
+            else:
+                self._handle_containers('restart', container, timeout=timeout)
+                print(container)
 
 
 class RemoveContainer(ContainerBase):
@@ -242,9 +241,15 @@ class RemoveContainer(ContainerBase):
         :param force(bool): Force the removal of a running container (uses SIGKILL)
         :param: link(bool): Remove the specified link and not the underlying container
         """
-        containers_removed = self._handle_containers('remove', container_list, **kwargs)
-        if containers_removed:
-            print('\n'.join(containers_removed))
+        for container in container_list:
+            if container.count('*') > 0: # wildcard name
+                containers = self._handle_wildcard(container)
+                for _container in containers:
+                    self._handle_containers('remove', _container, **kwargs)
+                    print(_container)
+            else:
+                self._handle_containers('remove', container, **kwargs)
+                print(container)
 
 
 class CreateContainer(ContainerBase):
@@ -270,7 +275,6 @@ class CreateContainer(ContainerBase):
                         print(ret['Id'])
                     if rm_flag:
                         cli.remove_container(ret['Id'])
-                        print(ret['Id'])
             except (errors.NotFound, errors.APIError, errors.DockerException) as e:
                 pyprint(e.explanation)
             # volumes_from and dns arguments raise TypeError exception 
