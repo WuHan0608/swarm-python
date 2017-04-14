@@ -62,6 +62,7 @@ class SwarmCommand(object):
 
     def _swarm_api(self):
         notice = '[Notice] No swarm api in use'
+        error = '[ERROR] No swarm api in use'
         if self._args.argument:
             if self._args.command == 'set':
                 if not is_api_inuse(self._config):
@@ -82,11 +83,30 @@ class SwarmCommand(object):
                 self._args.func.set_version(self._args.argument[0])
             elif self._args.command == 'use':
                 self._args.func.set_api(self._args.argument[0])
+            elif self._args.command in ('tls', 'tlscacert', 'tlscert', 'tlskey', 'tlsverify'):
+                if not is_api_inuse(self._config):
+                    print('\033[31m{error}\033[0m'.format(error=error))
+                    return
+                if self._args.command == 'tls':
+                    self._args.func.set_tls(self._args.argument[0])
+                elif self._args.command == 'tlscacert':
+                    self._args.func.set_tlscacert(self._args.argument[0])
+                elif self._args.command == 'tlscert':
+                    self._args.func.set_tlscert(self._args.argument[0])
+                elif self._args.command == 'tlskey':
+                    self._args.func.set_tlskey(self._args.argument[0])
+                elif self._args.command == 'tlsverify':
+                    self._args.func.set_tlsverify(self._args.argument[0])
         else:
             if self._args.command == 'list':
                 if not is_api_inuse(self._config):
                     print('\033[33m{notice}\033[0m'.format(notice=notice))
                 self._args.func.list_api()
+            elif self._args.command == 'tlsconfig':
+                if not is_api_inuse(self._config):
+                    print('\033[31m{error}\033[0m'.format(error=error))
+                    return
+                self._args.func.get_tlsconfig()
             else:
                 print('Issue `swarm api -h` for help.')
                 exit(1)

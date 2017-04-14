@@ -117,3 +117,115 @@ class SwarmApi(object):
                 print(e)
             except OSError:
                 raise
+
+    def set_tls(self, value):
+        if self._has_config():
+            try:
+                if value in ('0', '1'):
+                    with open(self._config, 'r') as fp:
+                        data = json.load(fp)
+                    current = data['current']
+                    tlsconfig =  data.get('tlsconfig', {}).get(current, {})
+                    if tlsconfig.get('tlscert') and tlsconfig.get('tlskey'):
+                        tlsconfig['tls'] = value
+                        with open(self._config, 'w') as fp:
+                            fp.write(json.dumps(data, indent=4))
+                    else:
+                        print('Error: no specified tlscert/tlskey') 
+                else:
+                    print('Error: tls must be set either 0 or 1')
+            except IOError as e:
+                print(e)
+            except OSError:
+                raise
+
+    def set_tlsverify(self, value):
+        if self._has_config():
+            try:
+                if value in ('0', '1'):
+                    with open(self._config, 'r') as fp:
+                        data = json.load(fp)
+                    current = data['current']
+                    tlsconfig =  data.get('tlsconfig', {}).get(current, {})
+                    if tlsconfig.get('tlscert') and tlsconfig.get('tlskey'):
+                        tlsconfig['tlsverify'] = value
+                        with open(self._config, 'w') as fp:
+                            fp.write(json.dumps(data, indent=4))
+                    else:
+                        print('Error: no specified tlscert/tlskey')
+                else:
+                    print('Error: tlsverify must be set either 0 or 1')
+            except IOError as e:
+                print(e)
+            except OSError:
+                raise
+
+    def set_tlscacert(self, tlscacert):
+        if self._has_config():
+            try:
+                if os.path.exists(tlscacert):
+                    with open(self._config, 'r') as fp:
+                        data = json.load(fp)
+                    current = data['current']
+                    tlsconfig = data.setdefault('tlsconfig', {}).setdefault(current, {})
+                    tlsconfig['tlscacert'] = tlscacert
+                    with open(self._config, 'w') as fp:
+                        fp.write(json.dumps(data, indent=4))
+                else:
+                    print('Specified tlscacert is not found.')
+            except IOError as e:
+                print(e)
+            except OSError:
+                raise
+
+    def set_tlscert(self, tlscert):
+        if self._has_config():
+            try:
+                if os.path.exists(tlscert):
+                    with open(self._config, 'r') as fp:
+                        data = json.load(fp)
+                    current = data['current']
+                    tlsconfig = data.setdefault('tlsconfig', {}).setdefault(current, {})
+                    tlsconfig['tlscert'] = tlscert
+                    with open(self._config, 'w') as fp:
+                        fp.write(json.dumps(data, indent=4))
+                else:
+                    print('Specified tlscert is not found.')
+            except IOError as e:
+                print(e)
+            except OSError:
+                raise
+
+    def set_tlskey(self, tlskey):
+        if self._has_config():
+            try:
+                if os.path.exists(tlskey):
+                    with open(self._config, 'r') as fp:
+                        data = json.load(fp)
+                    current = data['current']
+                    tlsconfig = data.setdefault('tlsconfig', {}).setdefault(current, {})
+                    tlsconfig['tlskey'] = tlskey
+                    with open(self._config, 'w') as fp:
+                        fp.write(json.dumps(data, indent=4))
+                else:
+                    print('Specified tlskey is not found.')
+            except IOError as e:
+                print(e)
+            except OSError:
+                raise
+
+    def get_tlsconfig(self):
+        if self._has_config():
+            try:
+                with open(self._config, 'r') as fp:
+                    data = json.load(fp)
+                current = data['current']
+                tlsconfig = data.get('tlsconfig', {}).get(current, {})
+                if tlsconfig:
+                    for name in ('tls', 'tlscacert', 'tlscert', 'tlskey', 'tlsverify'):
+                        if tlsconfig.get(name):
+                            print('{name}: {value}'.format(name=name, value=tlsconfig.get(name)))
+            except IOError as e:
+                print(e)
+            except OSError as e:
+                raise

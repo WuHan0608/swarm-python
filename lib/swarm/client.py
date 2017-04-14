@@ -3,6 +3,7 @@
 from __future__ import print_function
 import json
 from docker import Client, errors
+from docker.tls import TLSConfig
 from swarm.api import SwarmApi
 from swarm.utils import pyprint
 
@@ -45,17 +46,37 @@ class SwarmClient(object):
         except OSError:
             raise
 
+    def _get_tlsconfig(self):
+        try:
+            with open(self._config, 'r') as fp:
+                data = json.load(fp)
+            current = data['current']
+            tlsconfig = data.get('tlsconfig', {}).get(current, {})
+            return tlsconfig if tlsconfig else None
+        except IOError as e:
+            pyprint(e)
+            return
+        except OSError:
+            raise
+
     @property
     def client(self):
         base_url = self._get_base_url()
         if base_url is not None:
             try:
-                cli = Client(base_url, version=self.version, timeout=3)
+                tls = False
+                _tlsconfig = self._get_tlsconfig()
+                if _tlsconfig is not None:
+                    client_cert = (_tlsconfig.get('tlscert'), _tlsconfig.get('tlskey'))
+                    ca_cert = _tlsconfig.get('tlscacert')
+                    verify = True if  _tlsconfig.get('tlsverify') == '1' else False
+                    tls = TLSConfig(client_cert=client_cert, ca_cert=ca_cert, verify=verify)
+                cli = Client(base_url, version=self.version, timeout=3, tls=tls)
                 # Hits the /_ping endpoint of the remote API and returns the result. 
                 # An exception will be raised if the endpoint isn't responding.
                 if cli.ping() == 'OK':
                     cli.close()
-                    return Client(base_url, version=self.version, timeout=600)
+                    return Client(base_url, version=self.version, timeout=600, tls=tls)
                 return
             except errors.DockerException as e:
                 pyprint(e)

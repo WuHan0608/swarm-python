@@ -37,7 +37,7 @@ Version=ret['Version'],
 ApiVersion=ret['ApiVersion'],
 GoVersion=ret['GoVersion'],
 GitCommit=ret['GitCommit'],
-KernelVersion=ret['KernelVersion'],
+KernelVersion=ret.get('KernelVersion', 'unknown'),
 Os=ret['Os'],
 Arch=ret['Arch'])
             print(string)

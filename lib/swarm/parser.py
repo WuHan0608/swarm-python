@@ -95,7 +95,8 @@ class SwarmArgumentParser(object):
         return self._parser.parse_args()
 
     def _add_parser_api(self):
-        choices = ('list', 'set', 'unset', 'use', 'version')
+        choices = ('list', 'set', 'unset', 'use', 'version', 'tls', 'tlscacert', 'tlscert',
+                    'tlskey', 'tlsverify', 'tlsconfig')
         parser_api = self._subparsers.add_parser('api', description=self._help['api'],
                                                         help=self._help['api'],
                                                         usage=self._usage['api'],
@@ -111,7 +112,13 @@ list
 set [ api1=tcp://ip:port api2=tcp://ip:port ... ]
 unset [ api1 api2 ... | all ]
 use api1
-version [ x.xx | auto ]''')
+version [ x.xx | auto ]
+tlsconfig
+tls [0|1]
+tlscacert /path/to/tlscacert
+tlscert   /path/to/cert
+tlskey    /path/to/key
+tlsverify [0|1]''')
         parser_api.set_defaults(func=SwarmApi())
         parser_api.set_defaults(cmd='api')
 
